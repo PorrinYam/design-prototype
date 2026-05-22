@@ -1,0 +1,3130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>仓库报表系统 - Warehouse Reports</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght=300;400;500;600;700&display=swap');
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; transition: background-color 0.3s ease; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.08); }
+  .sidebar-item.active { background: rgba(255,255,255,0.15); border-left: 3px solid #60a5fa; }
+  .table-row:hover { background: #f8fafc; }
+  .tab-btn.active { border-bottom: 2px solid #3b82f6; color: #3b82f6; font-weight: 600; }
+  .badge { padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 500; }
+  .badge-red { background: #fef2f2; color: #dc2626; }
+  .badge-orange { background: #fff7ed; color: #ea580c; }
+  .badge-yellow { background: #fefce8; color: #ca8a04; }
+  .badge-green { background: #f0fdf4; color: #16a34a; }
+  .badge-blue { background: #eff6ff; color: #2563eb; }
+  .fade-in { animation: fadeIn 0.3s ease-in; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .chart-container { position: relative; height: 280px; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #f1f5f9; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+  /* 交互模式全局切换控制 */
+  body.ui-mode-classic .optimal-only { display: none !important; }
+  body.ui-mode-optimal .classic-only { display: none !important; }
+
+  /* 侧滑详情抽屉及遮罩 */
+  .detail-drawer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .detail-drawer-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .detail-drawer {
+    position: fixed;
+    top: 0;
+    right: -520px;
+    width: 500px;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(20px);
+    box-shadow: -10px 0 40px rgba(15, 23, 42, 0.12);
+    border-left: 1px solid rgba(229, 231, 235, 0.8);
+    z-index: 1001;
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+  }
+  .detail-drawer.show {
+    right: 0;
+  }
+
+  /* 图表可视化侧滑抽屉及遮罩 */
+  .charts-drawer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .charts-drawer-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .charts-drawer {
+    position: fixed;
+    top: 0;
+    right: -620px;
+    width: 600px;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(20px);
+    box-shadow: -10px 0 40px rgba(15, 23, 42, 0.12);
+    border-left: 1px solid rgba(229, 231, 235, 0.8);
+    z-index: 1001;
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+  }
+  .charts-drawer.show {
+    right: 0;
+  }
+
+  /* 底部悬浮批量操作栏 */
+  .floating-batch-bar {
+    position: fixed;
+    bottom: -90px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 900;
+    transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .floating-batch-bar.show {
+    bottom: 24px;
+  }
+
+  /* 表格样式增强 - 粘性表头 */
+  .ui-mode-optimal .sticky-header th {
+    position: sticky;
+    top: 56px;
+    z-index: 20;
+    background: #f8fafc;
+    box-shadow: inset 0 -1px 0 #e2e8f0;
+  }
+  
+  /* 表格样式增强 - 左右侧固定列 */
+  .ui-mode-optimal .sticky-col-left {
+    position: sticky;
+    left: 0;
+    background: inherit;
+    z-index: 10;
+    box-shadow: 4px 0 8px -4px rgba(0, 0, 0, 0.08);
+  }
+  .ui-mode-optimal th.sticky-col-left {
+    background: #f8fafc;
+    z-index: 25;
+  }
+  
+  .ui-mode-optimal .sticky-col-right {
+    position: sticky;
+    right: 0;
+    background: inherit;
+    z-index: 10;
+    box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.08);
+  }
+  .ui-mode-optimal th.sticky-col-right {
+    background: #f8fafc;
+    z-index: 25;
+  }
+
+  /* 表格行微交互 */
+  .ui-mode-optimal .table-row {
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+  .ui-mode-optimal .table-row:hover {
+    background: rgba(59, 130, 246, 0.03) !important;
+  }
+  .ui-mode-optimal .table-row.selected-row {
+    background: rgba(59, 130, 246, 0.07) !important;
+  }
+
+  /* 表格密度控制 */
+  .ui-mode-optimal table.density-compact td { padding-top: 6px; padding-bottom: 6px; font-size: 13px; }
+  .ui-mode-optimal table.density-compact th { padding-top: 8px; padding-bottom: 8px; font-size: 13px; }
+  .ui-mode-optimal table.density-spacious td { padding-top: 14px; padding-bottom: 14px; font-size: 15px; }
+  .ui-mode-optimal table.density-spacious th { padding-top: 16px; padding-bottom: 16px; font-size: 15px; }
+
+  /* 新增过渡效果 */
+  .transition-all-300 {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .animate-pulse-subtle {
+    animation: pulseSubtle 2s infinite;
+  }
+  @keyframes pulseSubtle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .85; transform: scale(0.98); }
+  }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen ui-mode-optimal">
+
+<!-- 顶部导航 -->
+<header class="bg-white shadow-sm border-b border-gray-200 fixed top-0 left-0 right-0 z-50">
+  <div class="flex items-center justify-between px-6 h-14">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+      </div>
+      <h1 class="text-lg font-semibold text-gray-800">仓库报表系统</h1>
+      <span class="text-xs text-gray-400 ml-2">v2.2.0</span>
+    </div>
+    
+    <!-- 极优交互模式一键切换胶囊 -->
+    <div class="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 shadow-inner select-none transition-all duration-200">
+      <button id="btn-mode-classic" onclick="setUIMode('classic')" class="px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 flex items-center gap-1.5 text-slate-500 hover:text-slate-800">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
+        经典旧版
+      </button>
+      <button id="btn-mode-optimal" onclick="setUIMode('optimal')" class="px-3 py-1 rounded-md text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 bg-white text-blue-600 shadow-sm border border-slate-200/50">
+        <svg class="w-3.5 h-3.5 animate-pulse-subtle text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        极智新版 (推荐)
+      </button>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <div class="text-sm text-gray-500">
+        <span class="text-gray-400">最后更新:</span> 2026-05-22 14:30
+      </div>
+      <button class="p-2 hover:bg-gray-100 rounded-lg relative">
+        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+      </button>
+      <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white text-sm font-medium">管</div>
+    </div>
+  </div>
+</header>
+
+<div class="flex pt-14">
+<!-- 侧边栏 -->
+<aside class="w-56 bg-gray-900 text-white fixed top-14 bottom-0 overflow-y-auto">
+  <nav class="py-4">
+    <div class="px-4 mb-3">
+      <div class="text-xs text-gray-400 uppercase tracking-wider">报表中心</div>
+    </div>
+    <a href="#" class="sidebar-item active flex items-center gap-3 px-4 py-2.5 text-sm transition-colors" data-tab="inventory-realtime" onclick="switchTab('inventory-realtime')">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      即时库存表
+    </a>
+    <a href="#" class="sidebar-item flex items-center gap-3 px-4 py-2.5 text-sm transition-colors" data-tab="inventory-ledger" onclick="switchTab('inventory-ledger')">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      库存明细台账
+    </a>
+    <a href="#" class="sidebar-item flex items-center gap-3 px-4 py-2.5 text-sm transition-colors" data-tab="inbound-outbound-detail" onclick="switchTab('inbound-outbound-detail')">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+      出入库明细表
+    </a>
+    <a href="#" class="sidebar-item flex items-center gap-3 px-4 py-2.5 text-sm transition-colors" data-tab="inbound-outbound-summary" onclick="switchTab('inbound-outbound-summary')">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      出入库汇总表
+    </a>
+    <a href="#" class="sidebar-item flex items-center gap-3 px-4 py-2.5 text-sm transition-colors" data-tab="inventory-analysis" onclick="switchTab('inventory-analysis')">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg>
+      库存分析报表
+    </a>
+    <a href="#" class="sidebar-item flex items-center gap-3 px-4 py-2.5 text-sm transition-colors" data-tab="alert-reports" onclick="switchTab('alert-reports')">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+      预警报表
+      <span class="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">6</span>
+    </a>
+  </nav>
+</aside>
+
+<!-- 主内容区 -->
+<main class="ml-56 flex-1 p-6">
+
+<!-- ==================== 1. 即时库存表 ==================== -->
+<div id="inventory-realtime" class="report-section fade-in">
+  <div class="mb-6">
+    <h2 class="text-xl font-semibold text-gray-800">即时库存表</h2>
+    <p class="text-sm text-gray-500 mt-1">实时库存快照 · 当前库存数量、金额、库位分布</p>
+  </div>
+
+  <!-- 筛选条件 - 经典旧版 -->
+  <div class="classic-only bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+    <div class="flex flex-wrap gap-3 items-end">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">仓库</label>
+        <select id="classic-filter-warehouse" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-36">
+          <option>全部仓库</option>
+          <option>主仓库 A</option>
+          <option>备件仓库 B</option>
+          <option>成品仓库 C</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">物料编码/名称</label>
+        <input type="text" id="classic-filter-search" placeholder="输入编码或名称" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-48">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">物料分类</label>
+        <select id="classic-filter-category" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-36">
+          <option>全部分类</option>
+          <option>原材料</option>
+          <option>半成品</option>
+          <option>成品</option>
+          <option>备品备件</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">日期</label>
+        <input type="date" id="classic-filter-date" value="2026-05-22" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-36">
+      </div>
+      <button onclick="applyClassicFilters()" class="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700 transition-colors">
+        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        查询
+      </button>
+      <button onclick="resetClassicFilters()" class="bg-white border border-gray-300 text-gray-600 px-4 py-1.5 rounded-md text-sm hover:bg-gray-50 transition-colors">重置</button>
+    </div>
+  </div>
+
+  <!-- 筛选条件 - 极智新版 -->
+  <div class="optimal-only mb-4 flex flex-col gap-3">
+    <!-- 第一行：智能搜索、快捷预设、高级筛选折叠按钮 -->
+    <div class="flex items-center gap-3">
+      <!-- 智能搜索框 -->
+      <div class="relative flex-1">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        </span>
+        <input type="text" id="optimal-search-input" oninput="handleOptimalSearch()" placeholder="输入物料编码、名称、规格或库位智能模糊检索（支持防抖即时响应，高亮显示）..." class="pl-9 pr-8 py-2 w-full text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-all duration-200">
+        <!-- 清空按钮 -->
+        <span id="btn-clear-search" onclick="clearOptimalSearch()" class="hidden absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-slate-400 hover:text-slate-600">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </span>
+      </div>
+      
+      <!-- 常用快捷视图 (Preset Views) -->
+      <div class="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs shadow-sm">
+        <button id="view-preset-all" onclick="applyPresetView('all')" class="px-3 py-1.5 rounded-md font-semibold bg-white text-blue-600 shadow-sm transition-all duration-200">全部</button>
+        <button id="view-preset-alert" onclick="applyPresetView('alert')" class="px-3 py-1.5 rounded-md text-slate-600 hover:bg-white/50 transition-all duration-200 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+          安全预警
+        </button>
+        <button id="view-preset-valuable" onclick="applyPresetView('valuable')" class="px-3 py-1.5 rounded-md text-slate-600 hover:bg-white/50 transition-all duration-200 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+          高值A类
+        </button>
+        <button id="view-preset-stagnant" onclick="applyPresetView('stagnant')" class="px-3 py-1.5 rounded-md text-slate-600 hover:bg-white/50 transition-all duration-200 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+          呆滞品
+        </button>
+      </div>
+
+      <!-- 高级筛选折叠切换按钮 -->
+      <button onclick="toggleAdvancedFilters()" class="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+        高级筛选
+        <svg id="adv-filter-arrow" class="w-3 h-3 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      
+      <!-- 图表分析按钮 (仅极智新版可见) -->
+      <button onclick="openChartsDrawer()" class="optimal-only flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 shadow-sm transition-all">
+        <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg>
+        图表分析
+      </button>
+    </div>
+
+    <!-- 第二行：高级筛选折叠面板 -->
+    <div id="advanced-filters-panel" class="hidden bg-white border border-slate-200 rounded-xl p-4 shadow-md transition-all duration-300">
+      <div class="grid grid-cols-4 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">存放仓库</label>
+          <select id="filter-opt-warehouse" onchange="updateOptimalFilters()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+            <option value="">全部仓库</option>
+            <option value="主仓库 A">主仓库 A</option>
+            <option value="备件仓库 B">备件仓库 B</option>
+            <option value="成品仓库 C">成品仓库 C</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">物料分类</label>
+          <select id="filter-opt-category" onchange="updateOptimalFilters()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+            <option value="">全部分类</option>
+            <option value="原材料">原材料</option>
+            <option value="半成品">半成品</option>
+            <option value="成品">成品</option>
+            <option value="备品备件">备品备件</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">库存金额区间</label>
+          <select id="filter-opt-price" onchange="updateOptimalFilters()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+            <option value="">全部金额</option>
+            <option value="low">¥10,000 以下</option>
+            <option value="medium">¥10,000 - ¥100,000</option>
+            <option value="high">¥100,000 以上</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">数据截止日期</label>
+          <input type="date" id="filter-opt-date" value="2026-05-22" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-100">
+        <button onclick="resetOptimalFilters()" class="bg-slate-100 text-slate-600 px-4 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-200 transition-colors">重置所有</button>
+        <button onclick="toggleAdvancedFilters()" class="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors shadow-sm">收起筛选</button>
+      </div>
+    </div>
+
+    <!-- 第三行：生效中的已选过滤标签群 (Filter Tags) -->
+    <div id="filter-tags-container" class="hidden flex items-center flex-wrap gap-2 py-1 text-xs bg-slate-50 px-3 py-2 rounded-lg border border-slate-200/50">
+      <span class="text-slate-500 font-semibold flex items-center gap-1">
+        <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+        生效中的筛选：
+      </span>
+      <!-- 动态插入标签 -->
+      <div id="filter-tags-list" class="flex flex-wrap gap-1.5"></div>
+      <button onclick="resetOptimalFilters()" class="text-blue-500 hover:text-blue-700 font-semibold ml-auto hover:underline flex items-center gap-0.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        清除所有条件
+      </button>
+    </div>
+  </div>
+
+  <!-- 统计卡片 -->
+  <div class="grid grid-cols-4 gap-4 mb-4">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div class="text-sm text-gray-500">物料总 SKU</div>
+      <div class="text-2xl font-bold text-gray-800 mt-1">2,847</div>
+      <div class="text-xs text-green-600 mt-1">较昨日 +12</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div class="text-sm text-gray-500">库存总金额</div>
+      <div class="text-2xl font-bold text-gray-800 mt-1">¥12.8M</div>
+      <div class="text-xs text-red-500 mt-1">较昨日 -0.3%</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div class="text-sm text-gray-500">库存总量</div>
+      <div class="text-2xl font-bold text-gray-800 mt-1">156,432</div>
+      <div class="text-xs text-green-600 mt-1">较昨日 +2.1%</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div class="text-sm text-gray-500">预警物料数</div>
+      <div class="text-2xl font-bold text-red-600 mt-1">23</div>
+      <div class="text-xs text-red-500 mt-1">需关注</div>
+    </div>
+  </div>
+
+  <!-- 图表区 -->
+  <div class="classic-only grid grid-cols-2 gap-4 mb-4">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <h3 class="text-sm font-medium text-gray-700 mb-3">各仓库库存金额占比</h3>
+      <div class="chart-container"><canvas id="chart-warehouse-pie"></canvas></div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <h3 class="text-sm font-medium text-gray-700 mb-3">库存金额 Top 10 物料</h3>
+      <div class="chart-container"><canvas id="chart-top10-bar"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 数据表格 -->
+  <div class="flex gap-4 items-stretch">
+    <!-- 左边栏以树罗列交互 (仅极智新版显示) -->
+    <div id="warehouse-tree-sidebar" class="optimal-only w-60 shrink-0 border border-slate-200 rounded-xl p-4 bg-white shadow-sm flex flex-col gap-3">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+        <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+          仓库架构体系
+        </span>
+        <button onclick="resetTreeFilter()" class="text-[10px] text-blue-500 hover:text-blue-700 font-semibold hover:underline">重置</button>
+      </div>
+      <div id="warehouse-tree-container" class="flex-1 overflow-y-auto pr-1 flex flex-col gap-1 text-slate-600 text-xs select-none">
+        <!-- 动态生成树状结构 -->
+      </div>
+    </div>
+
+    <!-- 实际数据表格 -->
+    <div class="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 min-w-0">
+    <div class="flex items-center justify-between p-4 border-b border-gray-200">
+      <div class="flex gap-2">
+        <button onclick="handleExportExcel()" class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1 shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          导出 Excel
+        </button>
+        <button onclick="window.print()" class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1 shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+          打印
+        </button>
+        <button onclick="refreshData()" class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1 shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          刷新
+        </button>
+      </div>
+
+      <!-- 极智新版独有的表格属性控制器 -->
+      <div class="optimal-only flex items-center gap-4 text-xs">
+        <!-- 密度调节器 -->
+        <div class="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-slate-600 shadow-inner">
+          <button id="btn-density-compact" onclick="setTableDensity('compact')" class="p-1 rounded hover:bg-white/60 transition-all" title="紧凑密度">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <button id="btn-density-comfortable" onclick="setTableDensity('comfortable')" class="p-1 rounded bg-white text-blue-600 shadow-sm transition-all" title="舒适密度">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5h16M4 12h16M4 19h16"/></svg>
+          </button>
+          <button id="btn-density-spacious" onclick="setTableDensity('spacious')" class="p-1 rounded hover:bg-white/60 transition-all" title="宽松密度">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16M4 12h16M4 20h16"/></svg>
+          </button>
+        </div>
+
+        <!-- 自定义列显示 -->
+        <div class="relative" id="col-selector-container">
+          <button onclick="toggleColumnSelector(event)" class="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 shadow-sm font-medium transition-colors">
+            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+            展示列
+          </button>
+          <!-- 下拉框气泡 -->
+          <div id="col-selector-dropdown" class="hidden absolute right-0 mt-1.5 w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-50 p-2 flex flex-col gap-1 select-none">
+            <label class="flex items-center gap-2 cursor-pointer text-slate-700 hover:bg-slate-50 px-2 py-1 rounded transition-colors"><input type="checkbox" checked onchange="toggleTableCol(3, this)" class="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5">规格型号</label>
+            <label class="flex items-center gap-2 cursor-pointer text-slate-700 hover:bg-slate-50 px-2 py-1 rounded transition-colors"><input type="checkbox" checked onchange="toggleTableCol(4, this)" class="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5">单位</label>
+            <label class="flex items-center gap-2 cursor-pointer text-slate-700 hover:bg-slate-50 px-2 py-1 rounded transition-colors"><input type="checkbox" checked onchange="toggleTableCol(6, this)" class="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5">库位</label>
+            <label class="flex items-center gap-2 cursor-pointer text-slate-700 hover:bg-slate-50 px-2 py-1 rounded transition-colors"><input type="checkbox" checked onchange="toggleTableCol(8, this)" class="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5">可用数量</label>
+            <label class="flex items-center gap-2 cursor-pointer text-slate-700 hover:bg-slate-50 px-2 py-1 rounded transition-colors"><input type="checkbox" checked onchange="toggleTableCol(9, this)" class="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5">已分配</label>
+            <label class="flex items-center gap-2 cursor-pointer text-slate-700 hover:bg-slate-50 px-2 py-1 rounded transition-colors"><input type="checkbox" checked onchange="toggleTableCol(10, this)" class="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5">在途数量</label>
+            <label class="flex items-center gap-2 cursor-pointer text-slate-700 hover:bg-slate-50 px-2 py-1 rounded transition-colors"><input type="checkbox" checked onchange="toggleTableCol(13, this)" class="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5">最后更新</label>
+          </div>
+        </div>
+      </div>
+
+      <span class="text-sm text-gray-500 font-medium">共 <strong id="realtime-record-count">8</strong> 条记录</span>
+    </div>
+    
+    <div class="overflow-x-auto relative">
+      <table id="inventory-table" class="w-full text-sm density-comfortable">
+        <!-- 头部 -->
+        <thead class="bg-gray-50 border-b border-gray-200 sticky-header">
+          <tr>
+            <th class="optimal-only px-4 py-3 text-center sticky-col-left w-10 z-30" style="background:#f8fafc;"><input type="checkbox" id="select-all-rows" onchange="toggleSelectAllRows(this)" class="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"></th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 sticky-col-left left-col-sku cursor-pointer hover:text-gray-700 select-none" onclick="sortTableBySku()">物料编码 ↕</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500">物料名称</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 col-spec">规格型号</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 col-unit">单位</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500">仓库</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 col-bin">库位</th>
+            <th class="px-4 py-3 text-right font-semibold text-gray-500 cursor-pointer hover:text-gray-700 select-none" onclick="sortTableByQty()">库存数量 ↕</th>
+            <th class="px-4 py-3 text-right font-semibold text-gray-500 col-avail">可用数量</th>
+            <th class="px-4 py-3 text-right font-semibold text-gray-500 col-assigned">已分配</th>
+            <th class="px-4 py-3 text-right font-semibold text-gray-500 col-intransit">在途数量</th>
+            <th class="px-4 py-3 text-right font-semibold text-gray-500">单价(¥)</th>
+            <th class="px-4 py-3 text-right font-semibold text-gray-500">库存金额(¥)</th>
+            <th class="px-4 py-3 text-left font-semibold text-gray-500 col-lastupdate">最后更新</th>
+            <th class="optimal-only px-4 py-3 text-center sticky-col-right w-24 z-30" style="background:#f8fafc;">快捷分析</th>
+          </tr>
+        </thead>
+        
+        <!-- 表身 -->
+        <tbody class="divide-y divide-gray-100" id="inventory-tbody">
+          <!-- MAT-001 -->
+          <tr class="table-row" data-sku="MAT-001" data-warehouse="主仓库 A" data-category="备品备件" data-qty="1250" data-amount="56250" data-alert="no" onclick="handleRowClick(this, 'MAT-001', event)" ondblclick="openRowDetailDrawer('MAT-001')">
+            <td class="optimal-only px-4 py-3 text-center sticky-col-left"><input type="checkbox" class="row-checkbox cursor-pointer w-4 h-4 rounded text-blue-600 focus:ring-blue-500" onchange="handleRowSelect(this, event)" onclick="event.stopPropagation()"></td>
+            <td class="px-4 py-3 font-mono text-xs sticky-col-left left-col-sku font-semibold text-blue-600">MAT-001</td>
+            <td class="px-4 py-3 font-medium text-slate-800">轴承 SKF 6205</td>
+            <td class="px-4 py-3 text-gray-500 col-spec">25×52×15mm</td>
+            <td class="px-4 py-3 col-unit">个</td>
+            <td class="px-4 py-3"><span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>主仓库 A</span></td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-600 col-bin">A-01-03</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">1,250</td>
+            <td class="px-4 py-3 text-right text-slate-600 col-avail">1,180</td>
+            <td class="px-4 py-3 text-right text-orange-500 font-semibold col-assigned">70</td>
+            <td class="px-4 py-3 text-right text-blue-500 font-medium col-intransit">500</td>
+            <td class="px-4 py-3 text-right font-mono">45.00</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">56,250.00</td>
+            <td class="px-4 py-3 text-gray-400 text-xs col-lastupdate">05-22 14:25</td>
+            <td class="optimal-only px-4 py-3 text-center sticky-col-right"><button onclick="event.stopPropagation(); openRowDetailDrawer('MAT-001')" class="text-blue-600 hover:text-blue-800 font-bold text-xs flex items-center gap-1 justify-center w-full bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-all">分析 →</button></td>
+          </tr>
+          <!-- MAT-002 -->
+          <tr class="table-row" data-sku="MAT-002" data-warehouse="主仓库 A" data-category="原材料" data-qty="86" data-amount="245100" data-alert="no" onclick="handleRowClick(this, 'MAT-002', event)" ondblclick="openRowDetailDrawer('MAT-002')">
+            <td class="optimal-only px-4 py-3 text-center sticky-col-left"><input type="checkbox" class="row-checkbox cursor-pointer w-4 h-4 rounded text-blue-600 focus:ring-blue-500" onchange="handleRowSelect(this, event)" onclick="event.stopPropagation()"></td>
+            <td class="px-4 py-3 font-mono text-xs sticky-col-left left-col-sku font-semibold text-blue-600">MAT-002</td>
+            <td class="px-4 py-3 font-medium text-slate-800">电机 YE2-132S-4</td>
+            <td class="px-4 py-3 text-gray-500 col-spec">5.5KW 380V</td>
+            <td class="px-4 py-3 col-unit">台</td>
+            <td class="px-4 py-3"><span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>主仓库 A</span></td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-600 col-bin">A-02-01</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">86</td>
+            <td class="px-4 py-3 text-right text-slate-600 col-avail">72</td>
+            <td class="px-4 py-3 text-right text-orange-500 font-semibold col-assigned">14</td>
+            <td class="px-4 py-3 text-right text-blue-500 font-medium col-intransit">30</td>
+            <td class="px-4 py-3 text-right font-mono">2,850.00</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">245,100.00</td>
+            <td class="px-4 py-3 text-gray-400 text-xs col-lastupdate">05-22 13:50</td>
+            <td class="optimal-only px-4 py-3 text-center sticky-col-right"><button onclick="event.stopPropagation(); openRowDetailDrawer('MAT-002')" class="text-blue-600 hover:text-blue-800 font-bold text-xs flex items-center gap-1 justify-center w-full bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-all">分析 →</button></td>
+          </tr>
+          <!-- MAT-003 -->
+          <tr class="table-row" data-sku="MAT-003" data-warehouse="备件仓库 B" data-category="备品备件" data-qty="42" data-amount="70560" data-alert="no" onclick="handleRowClick(this, 'MAT-003', event)" ondblclick="openRowDetailDrawer('MAT-003')">
+            <td class="optimal-only px-4 py-3 text-center sticky-col-left"><input type="checkbox" class="row-checkbox cursor-pointer w-4 h-4 rounded text-blue-600 focus:ring-blue-500" onchange="handleRowSelect(this, event)" onclick="event.stopPropagation()"></td>
+            <td class="px-4 py-3 font-mono text-xs sticky-col-left left-col-sku font-semibold text-blue-600">MAT-003</td>
+            <td class="px-4 py-3 font-medium text-slate-800">液压缸 HSG-80/50</td>
+            <td class="px-4 py-3 text-gray-500 col-spec">行程 500mm</td>
+            <td class="px-4 py-3 col-unit">根</td>
+            <td class="px-4 py-3"><span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>备件仓库 B</span></td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-600 col-bin">B-03-05</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">42</td>
+            <td class="px-4 py-3 text-right text-slate-600 col-avail">42</td>
+            <td class="px-4 py-3 text-right text-slate-400 col-assigned">0</td>
+            <td class="px-4 py-3 text-right text-blue-500 font-medium col-intransit">15</td>
+            <td class="px-4 py-3 text-right font-mono">1,680.00</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">70,560.00</td>
+            <td class="px-4 py-3 text-gray-400 text-xs col-lastupdate">05-22 12:10</td>
+            <td class="optimal-only px-4 py-3 text-center sticky-col-right"><button onclick="event.stopPropagation(); openRowDetailDrawer('MAT-003')" class="text-blue-600 hover:text-blue-800 font-bold text-xs flex items-center gap-1 justify-center w-full bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-all">分析 →</button></td>
+          </tr>
+          <!-- MAT-004 -->
+          <tr class="table-row bg-red-50/70" data-sku="MAT-004" data-warehouse="主仓库 A" data-category="原材料" data-qty="35" data-amount="297.5" data-alert="yes" onclick="handleRowClick(this, 'MAT-004', event)" ondblclick="openRowDetailDrawer('MAT-004')">
+            <td class="optimal-only px-4 py-3 text-center sticky-col-left"><input type="checkbox" class="row-checkbox cursor-pointer w-4 h-4 rounded text-blue-600 focus:ring-blue-500" onchange="handleRowSelect(this, event)" onclick="event.stopPropagation()"></td>
+            <td class="px-4 py-3 font-mono text-xs sticky-col-left left-col-sku font-semibold text-blue-600">MAT-004</td>
+            <td class="px-4 py-3 font-medium text-red-900">密封圈 氟胶 <span class="badge badge-red ml-1">安全警报</span></td>
+            <td class="px-4 py-3 text-red-700/80 col-spec">Φ50×3.5</td>
+            <td class="px-4 py-3 col-unit">个</td>
+            <td class="px-4 py-3"><span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>主仓库 A</span></td>
+            <td class="px-4 py-3 font-mono text-xs text-red-700/80 col-bin">A-04-02</td>
+            <td class="px-4 py-3 text-right font-bold text-red-600">35</td>
+            <td class="px-4 py-3 text-right text-red-600 col-avail">35</td>
+            <td class="px-4 py-3 text-right text-slate-400 col-assigned">0</td>
+            <td class="px-4 py-3 text-right text-blue-500 font-medium col-intransit">2,000</td>
+            <td class="px-4 py-3 text-right font-mono text-red-800">8.50</td>
+            <td class="px-4 py-3 text-right font-bold text-red-600">297.50</td>
+            <td class="px-4 py-3 text-red-700/60 text-xs col-lastupdate">05-22 14:00</td>
+            <td class="optimal-only px-4 py-3 text-center sticky-col-right"><button onclick="event.stopPropagation(); openRowDetailDrawer('MAT-004')" class="text-red-600 hover:text-red-800 font-bold text-xs flex items-center gap-1 justify-center w-full bg-red-100 hover:bg-red-200 px-2 py-1 rounded transition-all">补货 →</button></td>
+          </tr>
+          <!-- MAT-005 -->
+          <tr class="table-row" data-sku="MAT-005" data-warehouse="成品仓库 C" data-category="成品" data-qty="320" data-amount="123200" data-alert="no" onclick="handleRowClick(this, 'MAT-005', event)" ondblclick="openRowDetailDrawer('MAT-005')">
+            <td class="optimal-only px-4 py-3 text-center sticky-col-left"><input type="checkbox" class="row-checkbox cursor-pointer w-4 h-4 rounded text-blue-600 focus:ring-blue-500" onchange="handleRowSelect(this, event)" onclick="event.stopPropagation()"></td>
+            <td class="px-4 py-3 font-mono text-xs sticky-col-left left-col-sku font-semibold text-blue-600">MAT-005</td>
+            <td class="px-4 py-3 font-medium text-slate-800">不锈钢板 304</td>
+            <td class="px-4 py-3 text-gray-500 col-spec">2.0×1220×2440mm</td>
+            <td class="px-4 py-3 col-unit">张</td>
+            <td class="px-4 py-3"><span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>成品仓库 C</span></td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-600 col-bin">C-01-01</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">320</td>
+            <td class="px-4 py-3 text-right text-slate-600 col-avail">280</td>
+            <td class="px-4 py-3 text-right text-orange-500 font-semibold col-assigned">40</td>
+            <td class="px-4 py-3 text-right text-slate-400 col-intransit">0</td>
+            <td class="px-4 py-3 text-right font-mono">385.00</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">123,200.00</td>
+            <td class="px-4 py-3 text-gray-400 text-xs col-lastupdate">05-22 11:30</td>
+            <td class="optimal-only px-4 py-3 text-center sticky-col-right"><button onclick="event.stopPropagation(); openRowDetailDrawer('MAT-005')" class="text-blue-600 hover:text-blue-800 font-bold text-xs flex items-center gap-1 justify-center w-full bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-all">分析 →</button></td>
+          </tr>
+          <!-- MAT-006 -->
+          <tr class="table-row" data-sku="MAT-006" data-warehouse="备件仓库 B" data-category="备品备件" data-qty="12" data-amount="50400" data-alert="no" onclick="handleRowClick(this, 'MAT-006', event)" ondblclick="openRowDetailDrawer('MAT-006')">
+            <td class="optimal-only px-4 py-3 text-center sticky-col-left"><input type="checkbox" class="row-checkbox cursor-pointer w-4 h-4 rounded text-blue-600 focus:ring-blue-500" onchange="handleRowSelect(this, event)" onclick="event.stopPropagation()"></td>
+            <td class="px-4 py-3 font-mono text-xs sticky-col-left left-col-sku font-semibold text-blue-600">MAT-006</td>
+            <td class="px-4 py-3 font-medium text-slate-800">PLC控制器 S7-1200</td>
+            <td class="px-4 py-3 text-gray-500 col-spec">CPU 1214C</td>
+            <td class="px-4 py-3 col-unit">台</td>
+            <td class="px-4 py-3"><span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>备件仓库 B</span></td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-600 col-bin">B-01-02</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">12</td>
+            <td class="px-4 py-3 text-right text-slate-600 col-avail">8</td>
+            <td class="px-4 py-3 text-right text-orange-500 font-semibold col-assigned">4</td>
+            <td class="px-4 py-3 text-right text-blue-500 font-medium col-intransit">5</td>
+            <td class="px-4 py-3 text-right font-mono">4,200.00</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">50,400.00</td>
+            <td class="px-4 py-3 text-gray-400 text-xs col-lastupdate">05-22 10:15</td>
+            <td class="optimal-only px-4 py-3 text-center sticky-col-right"><button onclick="event.stopPropagation(); openRowDetailDrawer('MAT-006')" class="text-blue-600 hover:text-blue-800 font-bold text-xs flex items-center gap-1 justify-center w-full bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-all">分析 →</button></td>
+          </tr>
+          <!-- MAT-007 -->
+          <tr class="table-row" data-sku="MAT-007" data-warehouse="主仓库 A" data-category="备品备件" data-qty="28" data-amount="88200" data-alert="no" onclick="handleRowClick(this, 'MAT-007', event)" ondblclick="openRowDetailDrawer('MAT-007')">
+            <td class="optimal-only px-4 py-3 text-center sticky-col-left"><input type="checkbox" class="row-checkbox cursor-pointer w-4 h-4 rounded text-blue-600 focus:ring-blue-500" onchange="handleRowSelect(this, event)" onclick="event.stopPropagation()"></td>
+            <td class="px-4 py-3 font-mono text-xs sticky-col-left left-col-sku font-semibold text-blue-600">MAT-007</td>
+            <td class="px-4 py-3 font-medium text-slate-800">减速机 XWD-5</td>
+            <td class="px-4 py-3 text-gray-500 col-spec">速比 1:29</td>
+            <td class="px-4 py-3 col-unit">台</td>
+            <td class="px-4 py-3"><span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>主仓库 A</span></td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-600 col-bin">A-03-04</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">28</td>
+            <td class="px-4 py-3 text-right text-slate-600 col-avail">28</td>
+            <td class="px-4 py-3 text-right text-slate-400 col-assigned">0</td>
+            <td class="px-4 py-3 text-right text-slate-400 col-intransit">0</td>
+            <td class="px-4 py-3 text-right font-mono">3,150.00</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">88,200.00</td>
+            <td class="px-4 py-3 text-gray-400 text-xs col-lastupdate">05-22 09:45</td>
+            <td class="optimal-only px-4 py-3 text-center sticky-col-right"><button onclick="event.stopPropagation(); openRowDetailDrawer('MAT-007')" class="text-blue-600 hover:text-blue-800 font-bold text-xs flex items-center gap-1 justify-center w-full bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-all">分析 →</button></td>
+          </tr>
+          <!-- MAT-008 -->
+          <tr class="table-row bg-yellow-50/70" data-sku="MAT-008" data-warehouse="主仓库 A" data-category="原材料" data-qty="450" data-amount="5760" data-alert="no" onclick="handleRowClick(this, 'MAT-008', event)" ondblclick="openRowDetailDrawer('MAT-008')">
+            <td class="optimal-only px-4 py-3 text-center sticky-col-left"><input type="checkbox" class="row-checkbox cursor-pointer w-4 h-4 rounded text-blue-600 focus:ring-blue-500" onchange="handleRowSelect(this, event)" onclick="event.stopPropagation()"></td>
+            <td class="px-4 py-3 font-mono text-xs sticky-col-left left-col-sku font-semibold text-blue-600">MAT-008</td>
+            <td class="px-4 py-3 font-medium text-slate-800">电缆 YJV 3×4mm² <span class="badge badge-yellow ml-1">超储警报</span></td>
+            <td class="px-4 py-3 text-gray-500 col-spec">阻燃</td>
+            <td class="px-4 py-3 col-unit">米</td>
+            <td class="px-4 py-3"><span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>主仓库 A</span></td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-600 col-bin">A-05-01</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">450</td>
+            <td class="px-4 py-3 text-right text-slate-600 col-avail">450</td>
+            <td class="px-4 py-3 text-right text-slate-400 col-assigned">0</td>
+            <td class="px-4 py-3 text-right text-blue-500 font-medium col-intransit">1,000</td>
+            <td class="px-4 py-3 text-right font-mono">12.80</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800">5,760.00</td>
+            <td class="px-4 py-3 text-gray-400 text-xs col-lastupdate">05-22 08:30</td>
+            <td class="optimal-only px-4 py-3 text-center sticky-col-right"><button onclick="event.stopPropagation(); openRowDetailDrawer('MAT-008')" class="text-blue-600 hover:text-blue-800 font-bold text-xs flex items-center gap-1 justify-center w-full bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-all">分析 →</button></td>
+          </tr>
+        </tbody>
+        
+        <!-- Footer - 经典旧版 -->
+        <tfoot class="classic-only bg-gray-50 border-t border-gray-200">
+          <tr>
+            <td colspan="6" class="px-4 py-3 font-medium text-gray-700">合计</td>
+            <td class="px-4 py-3 text-right font-bold">2,023</td>
+            <td class="px-4 py-3 text-right">1,995</td>
+            <td class="px-4 py-3 text-right">128</td>
+            <td class="px-4 py-3 text-right">3,550</td>
+            <td class="px-4 py-3 text-right">-</td>
+            <td class="px-4 py-3 text-right font-bold">639,767.50</td>
+            <td class="px-4 py-3"></td>
+          </tr>
+        </tfoot>
+
+        <!-- Footer - 极智新版 -->
+        <tfoot class="optimal-only bg-gray-50 border-t border-gray-200">
+          <tr>
+            <td class="px-4 py-3 text-center sticky-col-left" style="background:#f8fafc;"></td>
+            <td colspan="6" class="px-4 py-3 font-semibold text-slate-700 sticky-col-left left-col-sku" style="background:#f8fafc;">合计</td>
+            <td class="px-4 py-3 text-right font-bold text-slate-800" id="opt-total-qty">2,023</td>
+            <td class="px-4 py-3 text-right text-slate-600 col-avail" id="opt-total-avail">1,995</td>
+            <td class="px-4 py-3 text-right text-orange-500 font-bold col-assigned" id="opt-total-assigned">128</td>
+            <td class="px-4 py-3 text-right text-blue-500 font-bold col-intransit" id="opt-total-intransit">3,550</td>
+            <td class="px-4 py-3 text-right font-mono">-</td>
+            <td class="px-4 py-3 text-right font-bold text-blue-600" id="opt-total-amount">639,767.50</td>
+            <td class="px-4 py-3 text-slate-400 col-lastupdate"></td>
+            <td class="px-4 py-3 sticky-col-right" style="background:#f8fafc;"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <!-- 分页 -->
+    <div class="flex items-center justify-between p-4 border-t border-gray-200">
+      <div class="text-sm text-gray-500">每页
+        <select class="border border-gray-300 rounded px-2 py-1 text-sm mx-1">
+          <option>10</option><option selected>20</option><option>50</option><option>100</option>
+        </select>
+        条
+      </div>
+      <div class="flex items-center gap-1">
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50" disabled>上一页</button>
+        <button class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm">1</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">2</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">3</button>
+        <span class="px-2 text-gray-400">...</span>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">143</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">下一页</button>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- ==================== 2. 库存明细台账 ==================== -->
+<div id="inventory-ledger" class="report-section hidden fade-in">
+  <div class="mb-6">
+    <h2 class="text-xl font-semibold text-gray-800">库存明细台账</h2>
+    <p class="text-sm text-gray-500 mt-1">逐笔库存变动记录 · 收入/发出/结存全量流水</p>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+    <div class="flex flex-wrap gap-3 items-end">
+      <div><label class="block text-xs text-gray-500 mb-1">起始日期</label><input type="date" value="2026-05-01" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-36"></div>
+      <div><label class="block text-xs text-gray-500 mb-1">结束日期</label><input type="date" value="2026-05-22" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-36"></div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">仓库</label>
+        <select class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-32">
+          <option>全部仓库</option><option>主仓库 A</option><option>备件仓库 B</option><option>成品仓库 C</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">物料编码</label>
+        <input type="text" placeholder="输入编码" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-32">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">业务类型</label>
+        <select class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-32">
+          <option>全部类型</option><option>采购入库</option><option>销售出库</option><option>生产领料</option><option>退货入库</option><option>调拨</option><option>盘点调整</option>
+        </select>
+      </div>
+      <button class="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700">查询</button>
+      <button class="bg-white border border-gray-300 text-gray-600 px-4 py-1.5 rounded-md text-sm hover:bg-gray-50">重置</button>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+    <h3 class="text-sm font-medium text-gray-700 mb-3">库存金额变动趋势</h3>
+    <div class="chart-container"><canvas id="chart-ledger-trend"></canvas></div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div class="flex items-center justify-between p-4 border-b border-gray-200">
+      <div class="flex gap-2">
+        <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>导出 Excel</button>
+        <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>打印</button>
+      </div>
+      <span class="text-sm text-gray-500">共 <strong>1,256</strong> 条记录</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">日期</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">单据编号</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">业务类型</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">物料编码</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">物料名称</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">收入数量</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">发出数量</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">结存数量</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">收入金额(¥)</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">发出金额(¥)</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">结存金额(¥)</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">经办人</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">备注</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr class="table-row"><td class="px-4 py-3">05-22</td><td class="px-4 py-3 font-mono text-xs">IN-20260522-001</td><td class="px-4 py-3"><span class="badge badge-green">采购入库</span></td><td class="px-4 py-3 font-mono text-xs">MAT-001</td><td class="px-4 py-3">轴承 SKF 6205</td><td class="px-4 py-3 text-right text-green-600 font-medium">500</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right font-medium">1,250</td><td class="px-4 py-3 text-right text-green-600">22,500.00</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right font-medium">56,250.00</td><td class="px-4 py-3">张明</td><td class="px-4 py-3 text-gray-400 text-xs">PO-2026-0458</td></tr>
+          <tr class="table-row"><td class="px-4 py-3">05-22</td><td class="px-4 py-3 font-mono text-xs">OUT-20260522-003</td><td class="px-4 py-3"><span class="badge badge-red">销售出库</span></td><td class="px-4 py-3 font-mono text-xs">MAT-002</td><td class="px-4 py-3">电机 YE2-132S-4</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right text-red-600 font-medium">14</td><td class="px-4 py-3 text-right font-medium">86</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right text-red-600">39,900.00</td><td class="px-4 py-3 text-right font-medium">245,100.00</td><td class="px-4 py-3">李华</td><td class="px-4 py-3 text-gray-400 text-xs">SO-2026-0892</td></tr>
+          <tr class="table-row"><td class="px-4 py-3">05-21</td><td class="px-4 py-3 font-mono text-xs">IN-20260521-012</td><td class="px-4 py-3"><span class="badge badge-green">采购入库</span></td><td class="px-4 py-3 font-mono text-xs">MAT-005</td><td class="px-4 py-3">不锈钢板 304</td><td class="px-4 py-3 text-right text-green-600 font-medium">200</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right font-medium">320</td><td class="px-4 py-3 text-right text-green-600">77,000.00</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right font-medium">123,200.00</td><td class="px-4 py-3">王芳</td><td class="px-4 py-3 text-gray-400 text-xs">PO-2026-0461</td></tr>
+          <tr class="table-row"><td class="px-4 py-3">05-21</td><td class="px-4 py-3 font-mono text-xs">TRANSFER-005</td><td class="px-4 py-3"><span class="badge badge-blue">调拨</span></td><td class="px-4 py-3 font-mono text-xs">MAT-003</td><td class="px-4 py-3">液压缸 HSG-80/50</td><td class="px-4 py-3 text-right text-green-600 font-medium">15</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right font-medium">42</td><td class="px-4 py-3 text-right text-green-600">25,200.00</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right font-medium">70,560.00</td><td class="px-4 py-3">赵强</td><td class="px-4 py-3 text-gray-400 text-xs">A仓→B仓</td></tr>
+          <tr class="table-row"><td class="px-4 py-3">05-20</td><td class="px-4 py-3 font-mono text-xs">OUT-20260520-008</td><td class="px-4 py-3"><span class="badge badge-orange">生产领料</span></td><td class="px-4 py-3 font-mono text-xs">MAT-007</td><td class="px-4 py-3">减速机 XWD-5</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right text-red-600 font-medium">3</td><td class="px-4 py-3 text-right font-medium">28</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right text-red-600">9,450.00</td><td class="px-4 py-3 text-right font-medium">88,200.00</td><td class="px-4 py-3">刘伟</td><td class="px-4 py-3 text-gray-400 text-xs">WO-2026-0315</td></tr>
+          <tr class="table-row"><td class="px-4 py-3">05-20</td><td class="px-4 py-3 font-mono text-xs">ADJ-20260520-002</td><td class="px-4 py-3"><span class="badge badge-yellow">盘点调整</span></td><td class="px-4 py-3 font-mono text-xs">MAT-006</td><td class="px-4 py-3">PLC控制器 S7-1200</td><td class="px-4 py-3 text-right text-green-600 font-medium">2</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right font-medium">12</td><td class="px-4 py-3 text-right text-green-600">8,400.00</td><td class="px-4 py-3 text-right">-</td><td class="px-4 py-3 text-right font-medium">50,400.00</td><td class="px-4 py-3">陈静</td><td class="px-4 py-3 text-gray-400 text-xs">盘盈调整</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="flex items-center justify-between p-4 border-t border-gray-200">
+      <div class="text-sm text-gray-500">每页
+        <select class="border border-gray-300 rounded px-2 py-1 text-sm mx-1"><option>10</option><option selected>20</option><option>50</option></select>条
+      </div>
+      <div class="flex items-center gap-1">
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-500 hover:bg-gray-50" disabled>上一页</button>
+        <button class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm">1</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">2</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">3</button>
+        <span class="px-2 text-gray-400">...</span>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">63</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">下一页</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 3. 出入库明细表 ==================== -->
+<div id="inbound-outbound-detail" class="report-section hidden fade-in">
+  <div class="mb-6">
+    <h2 class="text-xl font-semibold text-gray-800">出入库明细表</h2>
+    <p class="text-sm text-gray-500 mt-1">入库/出库流水明细 · 每笔出入库业务记录</p>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+    <div class="flex flex-wrap gap-3 items-end">
+      <div><label class="block text-xs text-gray-500 mb-1">起始日期</label><input type="date" value="2026-05-01" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-36"></div>
+      <div><label class="block text-xs text-gray-500 mb-1">结束日期</label><input type="date" value="2026-05-22" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-36"></div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">出入库类型</label>
+        <select class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-32">
+          <option>全部类型</option><option>采购入库</option><option>销售出库</option><option>生产领料</option><option>退货入库</option><option>调拨入库</option><option>调拨出库</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">供应商/客户</label>
+        <input type="text" placeholder="输入名称" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-40">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">仓库</label>
+        <select class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-32">
+          <option>全部仓库</option><option>主仓库 A</option><option>备件仓库 B</option><option>成品仓库 C</option>
+        </select>
+      </div>
+      <button class="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700">查询</button>
+      <button class="bg-white border border-gray-300 text-gray-600 px-4 py-1.5 rounded-md text-sm hover:bg-gray-50">重置</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4 mb-4">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <h3 class="text-sm font-medium text-gray-700 mb-3">入库 vs 出库数量趋势</h3>
+      <div class="chart-container"><canvas id="chart-inout-trend"></canvas></div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <h3 class="text-sm font-medium text-gray-700 mb-3">出入库类型分布</h3>
+      <div class="chart-container"><canvas id="chart-inout-type"></canvas></div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div class="flex items-center justify-between p-4 border-b border-gray-200">
+      <div class="flex gap-2">
+        <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>导出 Excel</button>
+        <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1">批量操作</button>
+      </div>
+      <span class="text-sm text-gray-500">共 <strong>3,482</strong> 条记录</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">日期</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">单据号</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">出入库类型</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">物料编码</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">物料名称</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">规格</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">单位</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">数量</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">单价(¥)</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">金额(¥)</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">关联订单</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">仓库</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">经办人</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">状态</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr class="table-row"><td class="px-4 py-3">05-22</td><td class="px-4 py-3 font-mono text-xs">IN-20260522-001</td><td class="px-4 py-3"><span class="badge badge-green">采购入库</span></td><td class="px-4 py-3 font-mono text-xs">MAT-001</td><td class="px-4 py-3">轴承 SKF 6205</td><td class="px-4 py-3 text-gray-500">25×52×15mm</td><td class="px-4 py-3">个</td><td class="px-4 py-3 text-right text-green-600 font-medium">500</td><td class="px-4 py-3 text-right">45.00</td><td class="px-4 py-3 text-right font-medium">22,500.00</td><td class="px-4 py-3 font-mono text-xs">PO-2026-0458</td><td class="px-4 py-3">主仓库 A</td><td class="px-4 py-3">张明</td><td class="px-4 py-3"><span class="badge badge-green">已审核</span></td></tr>
+          <tr class="table-row"><td class="px-4 py-3">05-22</td><td class="px-4 py-3 font-mono text-xs">OUT-20260522-003</td><td class="px-4 py-3"><span class="badge badge-red">销售出库</span></td><td class="px-4 py-3 font-mono text-xs">MAT-002</td><td class="px-4 py-3">电机 YE2-132S-4</td><td class="px-4 py-3 text-gray-500">5.5KW 380V</td><td class="px-4 py-3">台</td><td class="px-4 py-3 text-right text-red-600 font-medium">14</td><td class="px-4 py-3 text-right">2,850.00</td><td class="px-4 py-3 text-right font-medium">39,900.00</td><td class="px-4 py-3 font-mono text-xs">SO-2026-0892</td><td class="px-4 py-3">主仓库 A</td><td class="px-4 py-3">李华</td><td class="px-4 py-3"><span class="badge badge-green">已审核</span></td></tr>
+          <tr class="table-row"><td class="px-4 py-3">05-22</td><td class="px-4 py-3 font-mono text-xs">IN-20260522-005</td><td class="px-4 py-3"><span class="badge badge-green">退货入库</span></td><td class="px-4 py-3 font-mono text-xs">MAT-007</td><td class="px-4 py-3">减速机 XWD-5</td><td class="px-4 py-3 text-gray-500">速比 1:29</td><td class="px-4 py-3">台</td><td class="px-4 py-3 text-right text-green-600 font-medium">2</td><td class="px-4 py-3 text-right">3,150.00</td><td class="px-4 py-3 text-right font-medium">6,300.00</td><td class="px-4 py-3 font-mono text-xs">RT-2026-0042</td><td class="px-4 py-3">主仓库 A</td><td class="px-4 py-3">刘伟</td><td class="px-4 py-3"><span class="badge badge-yellow">待审核</span></td></tr>
+          <tr class="table-row"><td class="px-4 py-3">05-21</td><td class="px-4 py-3 font-mono text-xs">OUT-20260521-015</td><td class="px-4 py-3"><span class="badge badge-orange">生产领料</span></td><td class="px-4 py-3 font-mono text-xs">MAT-008</td><td class="px-4 py-3">电缆 YJV 3×4mm²</td><td class="px-4 py-3 text-gray-500">阻燃</td><td class="px-4 py-3">米</td><td class="px-4 py-3 text-right text-red-600 font-medium">200</td><td class="px-4 py-3 text-right">12.80</td><td class="px-4 py-3 text-right font-medium">2,560.00</td><td class="px-4 py-3 font-mono text-xs">WO-2026-0315</td><td class="px-4 py-3">主仓库 A</td><td class="px-4 py-3">陈静</td><td class="px-4 py-3"><span class="badge badge-green">已审核</span></td></tr>
+          <tr class="table-row"><td class="px-4 py-3">05-21</td><td class="px-4 py-3 font-mono text-xs">IN-20260521-012</td><td class="px-4 py-3"><span class="badge badge-green">采购入库</span></td><td class="px-4 py-3 font-mono text-xs">MAT-005</td><td class="px-4 py-3">不锈钢板 304</td><td class="px-4 py-3 text-gray-500">2.0×1220×2440mm</td><td class="px-4 py-3">张</td><td class="px-4 py-3 text-right text-green-600 font-medium">200</td><td class="px-4 py-3 text-right">385.00</td><td class="px-4 py-3 text-right font-medium">77,000.00</td><td class="px-4 py-3 font-mono text-xs">PO-2026-0461</td><td class="px-4 py-3">成品仓库 C</td><td class="px-4 py-3">王芳</td><td class="px-4 py-3"><span class="badge badge-green">已审核</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="flex items-center justify-between p-4 border-t border-gray-200">
+      <div class="text-sm text-gray-500">每页 <select class="border border-gray-300 rounded px-2 py-1 text-sm mx-1"><option selected>10</option><option>20</option><option>50</option></select> 条</div>
+      <div class="flex items-center gap-1">
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-500 hover:bg-gray-50" disabled>上一页</button>
+        <button class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm">1</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">2</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">3</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">下一页</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 4. 出入库汇总表 ==================== -->
+<div id="inbound-outbound-summary" class="report-section hidden fade-in">
+  <div class="mb-6">
+    <h2 class="text-xl font-semibold text-gray-800">出入库汇总表</h2>
+    <p class="text-sm text-gray-500 mt-1">按周期/分类汇总 · 入库出库量、金额、单数统计</p>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+    <div class="flex flex-wrap gap-3 items-end">
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">汇总维度</label>
+        <div class="flex gap-1">
+          <button class="tab-btn active px-3 py-1.5 text-sm rounded-t-md border border-b-0 border-gray-300 bg-white" onclick="switchSummaryDim(this, 'daily')">按日</button>
+          <button class="tab-btn px-3 py-1.5 text-sm rounded-t-md border border-b-0 border-gray-300 bg-white hover:bg-gray-50" onclick="switchSummaryDim(this, 'weekly')">按周</button>
+          <button class="tab-btn px-3 py-1.5 text-sm rounded-t-md border border-b-0 border-gray-300 bg-white hover:bg-gray-50" onclick="switchSummaryDim(this, 'monthly')">按月</button>
+        </div>
+      </div>
+      <div><label class="block text-xs text-gray-500 mb-1">起始日期</label><input type="date" value="2026-05-01" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-36"></div>
+      <div><label class="block text-xs text-gray-500 mb-1">结束日期</label><input type="date" value="2026-05-22" class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-36"></div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">仓库</label>
+        <select class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-32"><option>全部仓库</option><option>主仓库 A</option><option>备件仓库 B</option><option>成品仓库 C</option></select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">物料分类</label>
+        <select class="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-32"><option>全部分类</option><option>原材料</option><option>半成品</option><option>成品</option><option>备品备件</option></select>
+      </div>
+      <button class="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700">查询</button>
+      <button class="bg-white border border-gray-300 text-gray-600 px-4 py-1.5 rounded-md text-sm hover:bg-gray-50">重置</button>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+    <h3 class="text-sm font-medium text-gray-700 mb-3">月度出入库对比</h3>
+    <div class="chart-container"><canvas id="chart-summary-monthly"></canvas></div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div class="flex items-center justify-between p-4 border-b border-gray-200">
+      <div class="flex gap-2">
+        <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>导出 Excel</button>
+      </div>
+      <span class="text-sm text-gray-500">共 <strong>22</strong> 条记录</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">日期</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">仓库</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">物料分类</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">入库数量</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">入库金额(¥)</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">入库单数</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">出库数量</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">出库金额(¥)</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">出库单数</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">净入库量</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">净入库金额(¥)</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr class="table-row"><td class="px-4 py-3">2026-05-22</td><td class="px-4 py-3">主仓库 A</td><td class="px-4 py-3">原材料</td><td class="px-4 py-3 text-right text-green-600 font-medium">850</td><td class="px-4 py-3 text-right text-green-600">156,200.00</td><td class="px-4 py-3 text-right">8</td><td class="px-4 py-3 text-right text-red-600 font-medium">320</td><td class="px-4 py-3 text-right text-red-600">89,400.00</td><td class="px-4 py-3 text-right">5</td><td class="px-4 py-3 text-right font-medium">530</td><td class="px-4 py-3 text-right font-medium">66,800.00</td></tr>
+          <tr class="table-row"><td class="px-4 py-3">2026-05-22</td><td class="px-4 py-3">主仓库 A</td><td class="px-4 py-3">备品备件</td><td class="px-4 py-3 text-right text-green-600 font-medium">120</td><td class="px-4 py-3 text-right text-green-600">42,500.00</td><td class="px-4 py-3 text-right">3</td><td class="px-4 py-3 text-right text-red-600 font-medium">85</td><td class="px-4 py-3 text-right text-red-600">28,600.00</td><td class="px-4 py-3 text-right">4</td><td class="px-4 py-3 text-right font-medium">35</td><td class="px-4 py-3 text-right font-medium">13,900.00</td></tr>
+          <tr class="table-row"><td class="px-4 py-3">2026-05-22</td><td class="px-4 py-3">成品仓库 C</td><td class="px-4 py-3">成品</td><td class="px-4 py-3 text-right text-green-600 font-medium">200</td><td class="px-4 py-3 text-right text-green-600">77,000.00</td><td class="px-4 py-3 text-right">2</td><td class="px-4 py-3 text-right text-red-600 font-medium">150</td><td class="px-4 py-3 text-right text-red-600">57,750.00</td><td class="px-4 py-3 text-right">3</td><td class="px-4 py-3 text-right font-medium">50</td><td class="px-4 py-3 text-right font-medium">19,250.00</td></tr>
+          <tr class="table-row"><td class="px-4 py-3">2026-05-21</td><td class="px-4 py-3">主仓库 A</td><td class="px-4 py-3">原材料</td><td class="px-4 py-3 text-right text-green-600 font-medium">620</td><td class="px-4 py-3 text-right text-green-600">98,300.00</td><td class="px-4 py-3 text-right">6</td><td class="px-4 py-3 text-right text-red-600 font-medium">450</td><td class="px-4 py-3 text-right text-red-600">72,100.00</td><td class="px-4 py-3 text-right">7</td><td class="px-4 py-3 text-right font-medium">170</td><td class="px-4 py-3 text-right font-medium">26,200.00</td></tr>
+          <tr class="table-row"><td class="px-4 py-3">2026-05-21</td><td class="px-4 py-3">备件仓库 B</td><td class="px-4 py-3">备品备件</td><td class="px-4 py-3 text-right text-green-600 font-medium">35</td><td class="px-4 py-3 text-right text-green-600">33,600.00</td><td class="px-4 py-3 text-right">2</td><td class="px-4 py-3 text-right text-red-600 font-medium">12</td><td class="px-4 py-3 text-right text-red-600">11,450.00</td><td class="px-4 py-3 text-right">2</td><td class="px-4 py-3 text-right font-medium">23</td><td class="px-4 py-3 text-right font-medium">22,150.00</td></tr>
+          <tr class="table-row"><td class="px-4 py-3">2026-05-20</td><td class="px-4 py-3">主仓库 A</td><td class="px-4 py-3">原材料</td><td class="px-4 py-3 text-right text-green-600 font-medium">480</td><td class="px-4 py-3 text-right text-green-600">67,200.00</td><td class="px-4 py-3 text-right">5</td><td class="px-4 py-3 text-right text-red-600 font-medium">380</td><td class="px-4 py-3 text-right text-red-600">53,400.00</td><td class="px-4 py-3 text-right">6</td><td class="px-4 py-3 text-right font-medium">100</td><td class="px-4 py-3 text-right font-medium">13,800.00</td></tr>
+        </tbody>
+        <tfoot class="bg-gray-50 border-t border-gray-200">
+          <tr>
+            <td colspan="3" class="px-4 py-3 font-medium text-gray-700">合计</td>
+            <td class="px-4 py-3 text-right font-bold text-green-600">2,305</td>
+            <td class="px-4 py-3 text-right font-bold text-green-600">474,800.00</td>
+            <td class="px-4 py-3 text-right">26</td>
+            <td class="px-4 py-3 text-right font-bold text-red-600">1,397</td>
+            <td class="px-4 py-3 text-right font-bold text-red-600">312,700.00</td>
+            <td class="px-4 py-3 text-right">27</td>
+            <td class="px-4 py-3 text-right font-bold">908</td>
+            <td class="px-4 py-3 text-right font-bold">162,100.00</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="flex items-center justify-between p-4 border-t border-gray-200">
+      <div class="text-sm text-gray-500">每页 <select class="border border-gray-300 rounded px-2 py-1 text-sm mx-1"><option selected>20</option><option>50</option><option>100</option></select> 条</div>
+      <div class="flex items-center gap-1">
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-500 hover:bg-gray-50" disabled>上一页</button>
+        <button class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm">1</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">2</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">下一页</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 5. 库存分析报表 ==================== -->
+<div id="inventory-analysis" class="report-section hidden fade-in">
+  <div class="mb-6">
+    <h2 class="text-xl font-semibold text-gray-800">库存分析报表</h2>
+    <p class="text-sm text-gray-500 mt-1">多维度库存分析 · ABC 分析 / 周转率分析 / 库龄分析</p>
+  </div>
+
+  <!-- 分析维度切换 -->
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+    <div class="flex gap-2">
+      <button class="analysis-tab active bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium" onclick="switchAnalysis(this, 'abc')">ABC 分析</button>
+      <button class="analysis-tab bg-white border border-gray-300 text-gray-600 px-4 py-2 rounded-md text-sm hover:bg-gray-50" onclick="switchAnalysis(this, 'turnover')">周转率分析</button>
+      <button class="analysis-tab bg-white border border-gray-300 text-gray-600 px-4 py-2 rounded-md text-sm hover:bg-gray-50" onclick="switchAnalysis(this, 'aging')">库龄分析</button>
+    </div>
+  </div>
+
+  <!-- ABC 分析内容 -->
+  <div id="analysis-abc" class="analysis-content">
+    <div class="grid grid-cols-4 gap-4 mb-4">
+      <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-4 text-white">
+        <div class="text-sm opacity-80">A 类物料 (高价值 70%)</div>
+        <div class="text-2xl font-bold mt-1">342</div>
+        <div class="text-sm opacity-80 mt-1">占比 12.0% · 金额占 70.2%</div>
+      </div>
+      <div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg p-4 text-white">
+        <div class="text-sm opacity-80">B 类物料 (中价值 20%)</div>
+        <div class="text-2xl font-bold mt-1">568</div>
+        <div class="text-sm opacity-80 mt-1">占比 19.9% · 金额占 19.8%</div>
+      </div>
+      <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-4 text-white">
+        <div class="text-sm opacity-80">C 类物料 (低价值 10%)</div>
+        <div class="text-2xl font-bold mt-1">1,937</div>
+        <div class="text-sm opacity-80 mt-1">占比 68.1% · 金额占 10.0%</div>
+      </div>
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="text-sm text-gray-500">总 SKU</div>
+        <div class="text-2xl font-bold text-gray-800 mt-1">2,847</div>
+        <div class="text-sm text-gray-400 mt-1">总金额 ¥12.8M</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <h3 class="text-sm font-medium text-gray-700 mb-3">ABC 帕累托图</h3>
+        <div class="chart-container"><canvas id="chart-abc-pareto"></canvas></div>
+      </div>
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <h3 class="text-sm font-medium text-gray-700 mb-3">ABC 类别金额占比</h3>
+        <div class="chart-container"><canvas id="chart-abc-pie"></canvas></div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div class="flex items-center justify-between p-4 border-b border-gray-200">
+        <div class="flex gap-2">
+          <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>导出分析报告</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">物料编码</th>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">物料名称</th>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">分类</th>
+              <th class="px-4 py-3 text-center font-medium text-gray-500">ABC 类别</th>
+              <th class="px-4 py-3 text-right font-medium text-gray-500">库存金额(¥)</th>
+              <th class="px-4 py-3 text-right font-medium text-gray-500">金额占比</th>
+              <th class="px-4 py-3 text-right font-medium text-gray-500">累计金额占比</th>
+              <th class="px-4 py-3 text-right font-medium text-gray-500">周转率(次/年)</th>
+              <th class="px-4 py-3 text-right font-medium text-gray-500">周转天数</th>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">库龄区间</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr class="table-row"><td class="px-4 py-3 font-mono text-xs">MAT-002</td><td class="px-4 py-3">电机 YE2-132S-4</td><td class="px-4 py-3">原材料</td><td class="px-4 py-3 text-center"><span class="badge bg-blue-100 text-blue-700">A</span></td><td class="px-4 py-3 text-right font-medium">245,100.00</td><td class="px-4 py-3 text-right">1.91%</td><td class="px-4 py-3 text-right">1.91%</td><td class="px-4 py-3 text-right">18.5</td><td class="px-4 py-3 text-right">19.7</td><td class="px-4 py-3">0-30天</td></tr>
+            <tr class="table-row"><td class="px-4 py-3 font-mono text-xs">MAT-005</td><td class="px-4 py-3">不锈钢板 304</td><td class="px-4 py-3">原材料</td><td class="px-4 py-3 text-center"><span class="badge bg-blue-100 text-blue-700">A</span></td><td class="px-4 py-3 text-right font-medium">123,200.00</td><td class="px-4 py-3 text-right">0.96%</td><td class="px-4 py-3 text-right">2.87%</td><td class="px-4 py-3 text-right">22.3</td><td class="px-4 py-3 text-right">16.4</td><td class="px-4 py-3">0-30天</td></tr>
+            <tr class="table-row"><td class="px-4 py-3 font-mono text-xs">MAT-007</td><td class="px-4 py-3">减速机 XWD-5</td><td class="px-4 py-3">备品备件</td><td class="px-4 py-3 text-center"><span class="badge bg-amber-100 text-amber-700">B</span></td><td class="px-4 py-3 text-right font-medium">88,200.00</td><td class="px-4 py-3 text-right">0.69%</td><td class="px-4 py-3 text-right">3.56%</td><td class="px-4 py-3 text-right">8.2</td><td class="px-4 py-3 text-right">44.5</td><td class="px-4 py-3">31-90天</td></tr>
+            <tr class="table-row"><td class="px-4 py-3 font-mono text-xs">MAT-003</td><td class="px-4 py-3">液压缸 HSG-80/50</td><td class="px-4 py-3">备品备件</td><td class="px-4 py-3 text-center"><span class="badge bg-amber-100 text-amber-700">B</span></td><td class="px-4 py-3 text-right font-medium">70,560.00</td><td class="px-4 py-3 text-right">0.55%</td><td class="px-4 py-3 text-right">4.11%</td><td class="px-4 py-3 text-right">6.5</td><td class="px-4 py-3 text-right">56.2</td><td class="px-4 py-3">31-90天</td></tr>
+            <tr class="table-row"><td class="px-4 py-3 font-mono text-xs">MAT-001</td><td class="px-4 py-3">轴承 SKF 6205</td><td class="px-4 py-3">备品备件</td><td class="px-4 py-3 text-center"><span class="badge bg-green-100 text-green-700">C</span></td><td class="px-4 py-3 text-right font-medium">56,250.00</td><td class="px-4 py-3 text-right">0.44%</td><td class="px-4 py-3 text-right">4.55%</td><td class="px-4 py-3 text-right">35.2</td><td class="px-4 py-3 text-right">10.4</td><td class="px-4 py-3">0-30天</td></tr>
+            <tr class="table-row"><td class="px-4 py-3 font-mono text-xs">MAT-006</td><td class="px-4 py-3">PLC控制器 S7-1200</td><td class="px-4 py-3">备品备件</td><td class="px-4 py-3 text-center"><span class="badge bg-green-100 text-green-700">C</span></td><td class="px-4 py-3 text-right font-medium">50,400.00</td><td class="px-4 py-3 text-right">0.39%</td><td class="px-4 py-3 text-right">4.94%</td><td class="px-4 py-3 text-right">4.8</td><td class="px-4 py-3 text-right">76.0</td><td class="px-4 py-3">91-180天</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 周转率分析内容 -->
+  <div id="analysis-turnover" class="analysis-content hidden">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+      <h3 class="text-sm font-medium text-gray-700 mb-3">周转率分布</h3>
+      <div class="chart-container"><canvas id="chart-turnover-dist"></canvas></div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div class="grid grid-cols-4 gap-4 mb-4">
+        <div class="bg-white rounded-lg border border-gray-200 p-3"><div class="text-xs text-gray-500">平均周转率</div><div class="text-xl font-bold text-gray-800">12.4 次/年</div></div>
+        <div class="bg-white rounded-lg border border-gray-200 p-3"><div class="text-xs text-gray-500">平均周转天数</div><div class="text-xl font-bold text-gray-800">29.4 天</div></div>
+        <div class="bg-white rounded-lg border border-gray-200 p-3"><div class="text-xs text-gray-500">呆滞物料(>180天)</div><div class="text-xl font-bold text-red-600">86 项</div></div>
+        <div class="bg-white rounded-lg border border-gray-200 p-3"><div class="text-xs text-gray-500">呆滞金额</div><div class="text-xl font-bold text-red-600">¥2.1M</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 库龄分析内容 -->
+  <div id="analysis-aging" class="analysis-content hidden">
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <h3 class="text-sm font-medium text-gray-700 mb-3">库龄结构分布</h3>
+        <div class="chart-container"><canvas id="chart-aging-pie"></canvas></div>
+      </div>
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-green-50 border border-green-200 rounded-lg p-4"><div class="text-sm text-green-700">0-30天</div><div class="text-2xl font-bold text-green-800">¥5.2M</div><div class="text-xs text-green-600">占比 40.6%</div></div>
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4"><div class="text-sm text-blue-700">31-90天</div><div class="text-2xl font-bold text-blue-800">¥3.8M</div><div class="text-xs text-blue-600">占比 29.7%</div></div>
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-4"><div class="text-sm text-amber-700">91-180天</div><div class="text-2xl font-bold text-amber-800">¥1.7M</div><div class="text-xs text-amber-600">占比 13.3%</div></div>
+          <div class="bg-red-50 border border-red-200 rounded-lg p-4"><div class="text-sm text-red-700">180天以上</div><div class="text-2xl font-bold text-red-800">¥2.1M</div><div class="text-xs text-red-600">占比 16.4%</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 6. 预警报表 ==================== -->
+<div id="alert-reports" class="report-section hidden fade-in">
+  <div class="mb-6">
+    <h2 class="text-xl font-semibold text-gray-800">预警报表</h2>
+    <p class="text-sm text-gray-500 mt-1">库存异常预警 · 安全库存 / 超储 / 呆滞品 / 效期预警</p>
+  </div>
+
+  <!-- 预警统计看板 -->
+  <div class="grid grid-cols-4 gap-4 mb-4">
+    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        <span class="text-sm text-red-700 font-medium">安全库存预警</span>
+      </div>
+      <div class="text-2xl font-bold text-red-700 mt-2">8</div>
+      <div class="text-xs text-red-500 mt-1">库存低于安全库存</div>
+    </div>
+    <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        <span class="text-sm text-orange-700 font-medium">超储预警</span>
+      </div>
+      <div class="text-2xl font-bold text-orange-700 mt-2">5</div>
+      <div class="text-xs text-orange-500 mt-1">库存超过最大库存</div>
+    </div>
+    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="text-sm text-yellow-700 font-medium">呆滞品预警</span>
+      </div>
+      <div class="text-2xl font-bold text-yellow-700 mt-2">7</div>
+      <div class="text-xs text-yellow-500 mt-1">超过 90 天无出入库</div>
+    </div>
+    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span class="text-sm text-red-700 font-medium">效期预警</span>
+      </div>
+      <div class="text-2xl font-bold text-red-700 mt-2">3</div>
+      <div class="text-xs text-red-500 mt-1">临近或超过有效期</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4 mb-4">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <h3 class="text-sm font-medium text-gray-700 mb-3">预警类型分布</h3>
+      <div class="chart-container"><canvas id="chart-alert-type"></canvas></div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <h3 class="text-sm font-medium text-gray-700 mb-3">预警趋势 (近30天)</h3>
+      <div class="chart-container"><canvas id="chart-alert-trend"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 预警表格 -->
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div class="flex items-center justify-between p-4 border-b border-gray-200">
+      <div class="flex gap-2">
+        <div class="flex gap-1">
+          <button class="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm">全部 (23)</button>
+          <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50">安全库存 (8)</button>
+          <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50">超储 (5)</button>
+          <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50">呆滞 (7)</button>
+          <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50">效期 (3)</button>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>导出预警清单</button>
+        <button class="bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded-md text-sm hover:bg-gray-50 flex items-center gap-1">设置预警规则</button>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">预警级别</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">预警类型</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">物料编码</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">物料名称</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">当前库存</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">安全库存</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">最大库存</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">最后出入库</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">呆滞天数</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">有效期至</th>
+            <th class="px-4 py-3 text-right font-medium text-gray-500">剩余天数</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">建议操作</th>
+            <th class="px-4 py-3 text-left font-medium text-gray-500">操作</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr class="table-row bg-red-50">
+            <td class="px-4 py-3"><span class="badge badge-red">高</span></td>
+            <td class="px-4 py-3"><span class="badge badge-red">安全库存</span></td>
+            <td class="px-4 py-3 font-mono text-xs">MAT-004</td><td class="px-4 py-3">密封圈 氟胶</td>
+            <td class="px-4 py-3 text-right font-medium text-red-600">35</td>
+            <td class="px-4 py-3 text-right">500</td>
+            <td class="px-4 py-3 text-right">5,000</td>
+            <td class="px-4 py-3 text-gray-500">05-18</td>
+            <td class="px-4 py-3 text-right">4</td>
+            <td class="px-4 py-3">-</td>
+            <td class="px-4 py-3 text-right">-</td>
+            <td class="px-4 py-3 text-red-600 text-xs">紧急采购补货</td>
+            <td class="px-4 py-3"><button class="text-blue-600 hover:underline text-xs">标记处理</button></td>
+          </tr>
+          <tr class="table-row bg-red-50">
+            <td class="px-4 py-3"><span class="badge badge-red">高</span></td>
+            <td class="px-4 py-3"><span class="badge badge-red">安全库存</span></td>
+            <td class="px-4 py-3 font-mono text-xs">MAT-009</td><td class="px-4 py-3">继电器 MY4N-J</td>
+            <td class="px-4 py-3 text-right font-medium text-red-600">15</td>
+            <td class="px-4 py-3 text-right">200</td>
+            <td class="px-4 py-3 text-right">2,000</td>
+            <td class="px-4 py-3 text-gray-500">05-20</td>
+            <td class="px-4 py-3 text-right">2</td>
+            <td class="px-4 py-3">-</td>
+            <td class="px-4 py-3 text-right">-</td>
+            <td class="px-4 py-3 text-red-600 text-xs">紧急采购补货</td>
+            <td class="px-4 py-3"><button class="text-blue-600 hover:underline text-xs">标记处理</button></td>
+          </tr>
+          <tr class="table-row bg-orange-50">
+            <td class="px-4 py-3"><span class="badge badge-orange">中</span></td>
+            <td class="px-4 py-3"><span class="badge badge-orange">超储</span></td>
+            <td class="px-4 py-3 font-mono text-xs">MAT-010</td><td class="px-4 py-3">螺栓 M10×50</td>
+            <td class="px-4 py-3 text-right font-medium text-orange-600">25,000</td>
+            <td class="px-4 py-3 text-right">5,000</td>
+            <td class="px-4 py-3 text-right">20,000</td>
+            <td class="px-4 py-3 text-gray-500">05-22</td>
+            <td class="px-4 py-3 text-right">0</td>
+            <td class="px-4 py-3">-</td>
+            <td class="px-4 py-3 text-right">-</td>
+            <td class="px-4 py-3 text-orange-600 text-xs">减少采购量或调出</td>
+            <td class="px-4 py-3"><button class="text-blue-600 hover:underline text-xs">标记处理</button></td>
+          </tr>
+          <tr class="table-row bg-yellow-50">
+            <td class="px-4 py-3"><span class="badge badge-yellow">低</span></td>
+            <td class="px-4 py-3"><span class="badge badge-yellow">呆滞品</span></td>
+            <td class="px-4 py-3 font-mono text-xs">MAT-011</td><td class="px-4 py-3">旧型号轴承 6004</td>
+            <td class="px-4 py-3 text-right font-medium">180</td>
+            <td class="px-4 py-3 text-right">50</td>
+            <td class="px-4 py-3 text-right">1,000</td>
+            <td class="px-4 py-3 text-gray-500">02-15</td>
+            <td class="px-4 py-3 text-right text-yellow-600 font-medium">97</td>
+            <td class="px-4 py-3">-</td>
+            <td class="px-4 py-3 text-right">-</td>
+            <td class="px-4 py-3 text-yellow-600 text-xs">建议折价处理</td>
+            <td class="px-4 py-3"><button class="text-blue-600 hover:underline text-xs">标记处理</button></td>
+          </tr>
+          <tr class="table-row bg-red-50">
+            <td class="px-4 py-3"><span class="badge badge-red">高</span></td>
+            <td class="px-4 py-3"><span class="badge badge-red">效期</span></td>
+            <td class="px-4 py-3 font-mono text-xs">MAT-012</td><td class="px-4 py-3">密封胶 3M</td>
+            <td class="px-4 py-3 text-right font-medium">45</td>
+            <td class="px-4 py-3 text-right">100</td>
+            <td class="px-4 py-3 text-right">1,000</td>
+            <td class="px-4 py-3 text-gray-500">05-10</td>
+            <td class="px-4 py-3 text-right">12</td>
+            <td class="px-4 py-3 text-red-600 font-medium">2026-06-01</td>
+            <td class="px-4 py-3 text-right text-red-600 font-medium">10</td>
+            <td class="px-4 py-3 text-red-600 text-xs">立即使用或退换</td>
+            <td class="px-4 py-3"><button class="text-blue-600 hover:underline text-xs">标记处理</button></td>
+          </tr>
+          <tr class="table-row bg-yellow-50">
+            <td class="px-4 py-3"><span class="badge badge-yellow">低</span></td>
+            <td class="px-4 py-3"><span class="badge badge-yellow">呆滞品</span></td>
+            <td class="px-4 py-3 font-mono text-xs">MAT-013</td><td class="px-4 py-3">旧型号密封圈</td>
+            <td class="px-4 py-3 text-right font-medium">320</td>
+            <td class="px-4 py-3 text-right">100</td>
+            <td class="px-4 py-3 text-right">2,000</td>
+            <td class="px-4 py-3 text-gray-500">01-20</td>
+            <td class="px-4 py-3 text-right text-yellow-600 font-medium">123</td>
+            <td class="px-4 py-3">-</td>
+            <td class="px-4 py-3 text-right">-</td>
+            <td class="px-4 py-3 text-yellow-600 text-xs">建议折价处理</td>
+            <td class="px-4 py-3"><button class="text-blue-600 hover:underline text-xs">标记处理</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="flex items-center justify-between p-4 border-t border-gray-200">
+      <div class="text-sm text-gray-500">共 <strong>23</strong> 条预警</div>
+      <div class="flex items-center gap-1">
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-500 hover:bg-gray-50" disabled>上一页</button>
+        <button class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm">1</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">2</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">3</button>
+        <button class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">下一页</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 极智新版：图表可视化分析抽屉 -->
+<div id="charts-drawer-backdrop" class="charts-drawer-backdrop" onclick="closeChartsDrawer()"></div>
+<div id="charts-drawer" class="charts-drawer">
+  <!-- 抽屉头部 -->
+  <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+    <div class="flex items-center gap-2.5">
+      <span class="w-2.5 h-2.5 rounded-full bg-blue-600 animate-ping"></span>
+      <div>
+        <h3 class="text-base font-bold text-slate-800">库存图表可视化分析</h3>
+        <p class="text-xs text-slate-400 mt-0.5">即时库存占比与金额 Top 10 物料直观展示</p>
+      </div>
+    </div>
+    <button onclick="closeChartsDrawer()" class="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-400 hover:text-slate-700">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+  
+  <!-- 抽屉滚动内容区 -->
+  <div class="flex-1 overflow-y-auto p-5 space-y-6 bg-slate-50/50">
+    <!-- 各仓库库存金额占比 -->
+    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <h4 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1.5">
+        <span class="w-1.5 h-3 bg-blue-600 rounded-full"></span>
+        各仓库库存金额占比
+      </h4>
+      <div class="relative" style="height: 260px;">
+        <canvas id="opt-chart-warehouse-pie"></canvas>
+      </div>
+    </div>
+    
+    <!-- 库存金额 Top 10 物料 -->
+    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <h4 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1.5">
+        <span class="w-1.5 h-3 bg-blue-600 rounded-full"></span>
+        库存金额 Top 10 物料
+      </h4>
+      <div class="relative" style="height: 280px;">
+        <canvas id="opt-chart-top10-bar"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 极智新版：从属侧滑详情抽屉 -->
+<div id="detail-drawer-backdrop" class="detail-drawer-backdrop" onclick="closeRowDetailDrawer()"></div>
+<div id="detail-drawer" class="detail-drawer">
+  <!-- 抽屉头部 -->
+  <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+    <div class="flex items-center gap-2.5">
+      <span class="w-2.5 h-2.5 rounded-full bg-blue-600 animate-ping"></span>
+      <div>
+        <h3 class="text-base font-bold text-slate-800" id="drawer-title">物料分析详情</h3>
+        <p class="text-xs text-slate-400 mt-0.5">物料编码: <span id="drawer-sku" class="font-mono font-semibold">MAT-001</span></p>
+      </div>
+    </div>
+    <button onclick="closeRowDetailDrawer()" class="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-400 hover:text-slate-700">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+  
+  <!-- 抽屉滚动内容区 -->
+  <div class="flex-1 overflow-y-auto p-5 space-y-5">
+    <!-- 物料基本卡片 -->
+    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 flex gap-4">
+      <div class="w-16 h-16 bg-blue-600/10 rounded-xl flex items-center justify-center text-blue-600 flex-shrink-0 shadow-inner">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+      </div>
+      <div>
+        <h4 class="text-sm font-bold text-slate-800" id="drawer-mat-name">轴承 SKF 6205</h4>
+        <p class="text-xs text-slate-500 mt-1">规格：<span id="drawer-mat-spec" class="text-slate-700">25×52×15mm</span></p>
+        <p class="text-xs text-slate-500 mt-1">分类：<span id="drawer-mat-category" class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px] font-semibold">备品备件</span></p>
+      </div>
+    </div>
+
+    <!-- 实时库位与库存分布 -->
+    <div class="space-y-2">
+      <h4 class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">库存与库位分布</h4>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+          <p class="text-[10px] text-slate-400">总库存 / 库位</p>
+          <p class="text-lg font-bold text-slate-800 mt-1" id="drawer-mat-qty">1,250 <span class="text-xs font-normal text-slate-400" id="drawer-mat-unit">个</span></p>
+          <p class="text-xs font-mono text-blue-600 mt-0.5 font-semibold" id="drawer-mat-bin">A-01-03</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+          <p class="text-[10px] text-slate-400">可用数量 / 在途</p>
+          <p class="text-lg font-bold text-green-600 mt-1" id="drawer-mat-avail">1,180</p>
+          <p class="text-xs text-slate-500 mt-0.5">在途: <span class="text-blue-500 font-semibold" id="drawer-mat-transit">500</span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 各仓库存占比进度条 -->
+    <div class="space-y-3 bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <h4 class="text-xs font-bold text-slate-700">仓储占比分布</h4>
+      <div class="space-y-2.5">
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-500">主仓库 A (当前主要存放)</span>
+            <span class="font-bold text-slate-700" id="drawer-bar-a-pct">75%</span>
+          </div>
+          <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+            <div id="drawer-bar-a" class="bg-blue-500 h-full rounded-full transition-all duration-500" style="width: 75%;"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-500">备件仓库 B</span>
+            <span class="font-bold text-slate-700" id="drawer-bar-b-pct">15%</span>
+          </div>
+          <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+            <div id="drawer-bar-b" class="bg-amber-500 h-full rounded-full transition-all duration-500" style="width: 15%;"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-500">成品仓库 C</span>
+            <span class="font-bold text-slate-700" id="drawer-bar-c-pct">10%</span>
+          </div>
+          <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+            <div id="drawer-bar-c" class="bg-green-500 h-full rounded-full transition-all duration-500" style="width: 10%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 近30天库存金额变动趋势折线图 (Sparkline) -->
+    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="text-xs font-bold text-slate-700">近30天库存价值走势 (万元)</h4>
+        <span class="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-bold" id="drawer-turnover-tag">周转率: 高</span>
+      </div>
+      <div class="relative" style="height: 120px;">
+        <canvas id="chart-drawer-sparkline"></canvas>
+      </div>
+    </div>
+
+    <!-- 快捷决策备忘录 (双击行或直接在此编辑) -->
+    <div class="space-y-1.5">
+      <h4 class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">仓管即时备注</h4>
+      <div class="relative bg-amber-50/50 border border-amber-200/60 rounded-xl p-3 shadow-sm">
+        <textarea id="drawer-memo" rows="2" class="w-full text-xs bg-transparent border-none focus:ring-0 text-slate-700 p-0 placeholder-amber-600/40 resize-none focus:outline-none" placeholder="在此输入对该物料的即时备注，系统会自动高频保存至列表行中..."></textarea>
+        <div class="absolute bottom-1 right-2 text-[9px] text-amber-500/70 font-mono">自动同步中...</div>
+      </div>
+    </div>
+
+    <!-- 最近 5 笔出入库日志 -->
+    <div class="space-y-2">
+      <h4 class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">该物料最近出入流水</h4>
+      <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <table class="w-full text-[11px] text-left">
+          <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
+            <tr>
+              <th class="px-3 py-2">业务日期</th>
+              <th class="px-3 py-2">流水类型</th>
+              <th class="px-3 py-2 text-right">变动数量</th>
+              <th class="px-3 py-2">经办</th>
+            </tr>
+          </thead>
+          <tbody id="drawer-history-tbody" class="divide-y divide-slate-100 text-slate-600 font-medium">
+            <!-- 动态载入 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 抽屉脚部 -->
+  <div class="p-4 border-t border-slate-200 flex gap-2 bg-slate-50">
+    <button onclick="handleDrawerAdjust()" class="flex-1 bg-blue-600 text-white py-2.5 rounded-lg text-xs font-semibold hover:bg-blue-700 shadow-sm transition-colors flex items-center justify-center gap-1">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      库存盘点调整
+    </button>
+    <button onclick="handleDrawerAllocate()" class="flex-1 bg-white border border-slate-300 text-slate-700 py-2.5 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-colors flex items-center justify-center gap-1 shadow-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+      跨仓调拨申请
+    </button>
+  </div>
+</div>
+
+<!-- 极智新版：底部批量操作悬浮条 -->
+<div id="batch-action-bar" class="floating-batch-bar max-w-xl w-full px-4">
+  <div class="bg-slate-900/95 backdrop-blur-md border border-slate-800 text-white rounded-2xl py-3 px-5 shadow-2xl flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="w-6 h-6 rounded-full bg-blue-600 text-xs font-bold flex items-center justify-center" id="batch-select-count">0</span>
+      <div>
+        <p class="text-xs font-semibold">已勾选选定物料</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">支持批量跨仓调度、快速导出和一键合并</p>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="handleBatchExport()" class="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-[11px] font-semibold py-1.5 px-3 rounded-lg transition-colors flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        批量导出
+      </button>
+      <button onclick="handleBatchTransfer()" class="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold py-1.5 px-3 rounded-lg shadow-sm transition-colors flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+        批量调拨
+      </button>
+      <button onclick="clearAllSelections()" class="text-slate-400 hover:text-white text-[11px] font-semibold py-1.5 px-2 transition-all">
+        取消
+      </button>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- 底部状态栏 -->
+<footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-2 text-xs text-gray-400 flex justify-between ml-56">
+  <span>共 2,847 个物料 · 3 个仓库 · 4 个分类</span>
+  <span>数据统计截至 2026-05-22 14:30:00 · 原型版本 v1.0</span>
+</footer>
+
+<script>
+// Tab 切换
+function switchTab(tabId) {
+  document.querySelectorAll('.report-section').forEach(s => s.classList.add('hidden'));
+  document.getElementById(tabId).classList.remove('hidden');
+  document.querySelectorAll('.sidebar-item').forEach(a => a.classList.remove('active'));
+  document.querySelector('[data-tab="' + tabId + '"]').classList.add('active');
+}
+
+// 汇总维度切换
+function switchSummaryDim(btn, dim) {
+  document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.classList.add('hover:bg-gray-50'); });
+  btn.classList.add('active');
+  btn.classList.remove('hover:bg-gray-50');
+}
+
+// 分析维度切换
+function switchAnalysis(btn, type) {
+  document.querySelectorAll('.analysis-tab').forEach(b => { b.classList.remove('active', 'bg-blue-600', 'text-white'); b.classList.add('bg-white', 'border', 'border-gray-300', 'text-gray-600', 'hover:bg-gray-50'); });
+  btn.classList.add('active', 'bg-blue-600', 'text-white');
+  btn.classList.remove('bg-white', 'border', 'border-gray-300', 'text-gray-600', 'hover:bg-gray-50');
+  document.querySelectorAll('.analysis-content').forEach(c => c.classList.add('hidden'));
+  document.getElementById('analysis-' + type).classList.remove('hidden');
+}
+
+// 图表初始化
+const chartColors = { blue: '#3b82f6', red: '#ef4444', green: '#22c55e', amber: '#f59e0b', purple: '#8b5cf6', gray: '#6b7280' };
+
+// 即时库存 - 仓库占比饼图
+new Chart(document.getElementById('chart-warehouse-pie'), {
+  type: 'doughnut',
+  data: { labels: ['主仓库 A', '备件仓库 B', '成品仓库 C'], datasets: [{ data: [6800000, 3200000, 2800000], backgroundColor: [chartColors.blue, chartColors.amber, chartColors.green], borderWidth: 0 }] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+// 即时库存 - Top 10 柱状图
+new Chart(document.getElementById('chart-top10-bar'), {
+  type: 'bar',
+  data: {
+    labels: ['电机\nYE2-132S-4', '不锈钢板\n304', '减速机\nXWD-5', '液压缸\nHSG-80/50', '轴承\nSKF 6205', 'PLC\nS7-1200', '电缆\nYJV', '密封圈\n氟胶', '螺栓\nM10', '继电器\nMY4N'],
+    datasets: [{ label: '库存金额(¥)', data: [245100, 123200, 88200, 70560, 56250, 50400, 5760, 297.5, 12500, 8400], backgroundColor: chartColors.blue, borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => (v/1000) + 'K' } } } }
+});
+
+// 库存台账 - 趋势折线图
+new Chart(document.getElementById('chart-ledger-trend'), {
+  type: 'line',
+  data: {
+    labels: ['05-01','05-03','05-05','05-07','05-09','05-11','05-13','05-15','05-17','05-19','05-21','05-22'],
+    datasets: [
+      { label: '库存金额(万)', data: [1180,1195,1210,1205,1220,1235,1228,1245,1252,1268,1275,1280], borderColor: chartColors.blue, backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.3 },
+      { label: '入库金额(万)', data: [45,38,52,41,55,48,62,35,48,56,42,23], borderColor: chartColors.green, tension: 0.3 },
+      { label: '出库金额(万)', data: [32,28,38,45,35,42,38,52,41,38,35,18], borderColor: chartColors.red, tension: 0.3 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { ticks: { callback: v => v + '万' } } } }
+});
+
+// 出入库明细 - 趋势
+new Chart(document.getElementById('chart-inout-trend'), {
+  type: 'line',
+  data: {
+    labels: ['05-01','05-05','05-10','05-15','05-20','05-22'],
+    datasets: [
+      { label: '入库数量', data: [1200,980,1450,1100,1350,850], borderColor: chartColors.green, backgroundColor: 'rgba(34,197,94,0.1)', fill: true, tension: 0.3 },
+      { label: '出库数量', data: [850,1100,920,1250,980,320], borderColor: chartColors.red, backgroundColor: 'rgba(239,68,68,0.1)', fill: true, tension: 0.3 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+// 出入库类型分布
+new Chart(document.getElementById('chart-inout-type'), {
+  type: 'pie',
+  data: { labels: ['采购入库','销售出库','生产领料','退货入库','调拨'], datasets: [{ data: [35,28,22,8,7], backgroundColor: [chartColors.green, chartColors.red, chartColors.amber, chartColors.purple, chartColors.blue], borderWidth: 0 }] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+// 出入库汇总 - 月度对比
+new Chart(document.getElementById('chart-summary-monthly'), {
+  type: 'bar',
+  data: {
+    labels: ['5/1','5/3','5/5','5/7','5/9','5/11','5/13','5/15','5/17','5/19','5/21','5/22'],
+    datasets: [
+      { label: '入库金额(万)', data: [4.5,5.2,3.8,4.1,5.5,4.8,6.2,3.5,4.8,5.6,4.2,2.3], backgroundColor: chartColors.green, borderRadius: 4 },
+      { label: '出库金额(万)', data: [3.2,2.8,3.8,4.5,3.5,4.2,3.8,5.2,4.1,3.8,3.5,1.8], backgroundColor: chartColors.red, borderRadius: 4 }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+// ABC 分析 - 帕累托图
+new Chart(document.getElementById('chart-abc-pareto'), {
+  type: 'bar',
+  data: {
+    labels: ['电机\nYE2', '不锈钢板\n304', '减速机\nXWD', '液压缸\nHSG', '轴承\nSKF', 'PLC\nS7', '电缆\nYJV', '密封圈', '其他...'],
+    datasets: [
+      { label: '库存金额(万)', type: 'bar', data: [24.5,12.3,8.8,7.1,5.6,5.0,0.6,0.03,1.2], backgroundColor: chartColors.blue, borderRadius: 4, yAxisID: 'y' },
+      { label: '累计占比(%)', type: 'line', data: [1.9,2.9,3.6,4.1,4.6,5.0,5.1,5.1,5.2], borderColor: chartColors.red, tension: 0.3, yAxisID: 'y1', fill: false }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { position: 'left', ticks: { callback: v => v + '万' } }, y1: { position: 'right', max: 100, ticks: { callback: v => v + '%' } } } }
+});
+
+// ABC 饼图
+new Chart(document.getElementById('chart-abc-pie'), {
+  type: 'pie',
+  data: { labels: ['A类 (70.2%)', 'B类 (19.8%)', 'C类 (10.0%)'], datasets: [{ data: [70.2, 19.8, 10], backgroundColor: [chartColors.blue, chartColors.amber, chartColors.green], borderWidth: 0 }] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+// 周转率分布
+new Chart(document.getElementById('chart-turnover-dist'), {
+  type: 'bar',
+  data: {
+    labels: ['>30次', '20-30次', '10-20次', '5-10次', '2-5次', '<2次', '呆滞'],
+    datasets: [{ label: '物料数量', data: [180, 320, 580, 650, 480, 350, 287], backgroundColor: [chartColors.green, '#4ade80', chartColors.blue, chartColors.amber, '#fb923c', chartColors.red, '#991b1b'], borderRadius: 4 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+});
+
+// 库龄饼图
+new Chart(document.getElementById('chart-aging-pie'), {
+  type: 'doughnut',
+  data: { labels: ['0-30天', '31-90天', '91-180天', '180天以上'], datasets: [{ data: [40.6, 29.7, 13.3, 16.4], backgroundColor: [chartColors.green, chartColors.blue, chartColors.amber, chartColors.red], borderWidth: 0 }] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+// 预警类型分布
+new Chart(document.getElementById('chart-alert-type'), {
+  type: 'doughnut',
+  data: { labels: ['安全库存预警', '超储预警', '呆滞品预警', '效期预警'], datasets: [{ data: [8, 5, 7, 3], backgroundColor: [chartColors.red, chartColors.amber, chartColors.purple, '#f43f5e'], borderWidth: 0 }] },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+// 预警趋势
+new Chart(document.getElementById('chart-alert-trend'), {
+  type: 'line',
+  data: {
+    labels: Array.from({length:30}, (_,i) => (i+1) + '日'),
+    datasets: [
+      { label: '安全库存', data: [5,6,7,5,8,6,9,7,8,6,7,8,9,7,8,6,7,8,9,7,8,6,7,8,9,7,8,7,8,8], borderColor: chartColors.red, tension: 0.3, fill: false },
+      { label: '超储', data: [3,3,4,3,4,5,4,5,4,5,4,5,6,5,5,6,5,5,6,5,5,6,5,5,6,5,5,5,5,5], borderColor: chartColors.amber, tension: 0.3, fill: false },
+      { label: '呆滞品', data: [5,5,5,6,6,6,6,6,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7], borderColor: chartColors.purple, tension: 0.3, fill: false }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+// ==========================================
+// 极智新版 (Optimal Smart View) 交互控制器代码
+// ==========================================
+
+// 1. 深度模拟数据存储 (MAT-001 至 MAT-008)
+const skuMockData = {
+  'MAT-001': {
+    name: '轴承 SKF 6205',
+    spec: '25×52×15mm',
+    category: '备品备件',
+    qty: 1250,
+    unit: '个',
+    bin: 'A-01-03',
+    avail: 1180,
+    transit: 500,
+    warehouse: '主仓库 A',
+    turnover: '高',
+    dist: { A: 75, B: 15, C: 10 },
+    sparkline: [5.0, 5.2, 5.1, 5.3, 5.2, 5.4, 5.5, 5.6, 5.4, 5.5, 5.6, 5.625],
+    history: [
+      { date: '05-22 14:25', type: '采购入库', qty: '+500', operator: '张明' },
+      { date: '05-20 10:30', type: '生产领料', qty: '-80', operator: '李华' },
+      { date: '05-18 16:15', type: '采购入库', qty: '+300', operator: '张明' },
+      { date: '05-15 09:00', type: '生产领料', qty: '-120', operator: '王伟' },
+      { date: '05-12 11:45', type: '调拨入库', qty: '+100', operator: '赵强' }
+    ]
+  },
+  'MAT-002': {
+    name: '电机 YE2-132S-4',
+    spec: '5.5KW 380V',
+    category: '原材料',
+    qty: 86,
+    unit: '台',
+    bin: 'A-02-01',
+    avail: 72,
+    transit: 30,
+    warehouse: '主仓库 A',
+    turnover: '中',
+    dist: { A: 85, B: 10, C: 5 },
+    sparkline: [22.0, 23.5, 23.0, 24.0, 23.8, 24.2, 24.5, 24.8, 24.1, 24.3, 24.5, 24.51],
+    history: [
+      { date: '05-22 13:50', type: '销售出库', qty: '-14', operator: '李华' },
+      { date: '05-19 11:20', type: '采购入库', qty: '+20', operator: '张明' },
+      { date: '05-16 15:40', type: '销售出库', qty: '-8', operator: '李华' },
+      { date: '05-12 14:10', type: '采购入库', qty: '+15', operator: '张明' },
+      { date: '05-08 10:00', type: '生产领料', qty: '-5', operator: '王伟' }
+    ]
+  },
+  'MAT-003': {
+    name: '液压缸 HSG-80/50',
+    spec: '行程 500mm',
+    category: '备品备件',
+    qty: 42,
+    unit: '根',
+    bin: 'B-03-05',
+    avail: 42,
+    transit: 15,
+    warehouse: '备件仓库 B',
+    turnover: '中',
+    dist: { A: 20, B: 70, C: 10 },
+    sparkline: [6.5, 6.8, 6.7, 7.0, 6.9, 7.1, 7.0, 7.2, 7.1, 7.0, 7.1, 7.056],
+    history: [
+      { date: '05-22 12:10', type: '调拨入库', qty: '+15', operator: '赵强' },
+      { date: '05-18 09:30', type: '领用出库', qty: '-4', operator: '李华' },
+      { date: '05-14 16:20', type: '采购入库', qty: '+10', operator: '张明' },
+      { date: '05-09 14:00', type: '领用出库', qty: '-6', operator: '王伟' },
+      { date: '05-05 11:15', type: '调拨出库', qty: '-5', operator: '赵强' }
+    ]
+  },
+  'MAT-004': {
+    name: '密封圈 氟胶',
+    spec: 'Φ50×3.5',
+    category: '原材料',
+    qty: 35,
+    unit: '个',
+    bin: 'A-04-02',
+    avail: 35,
+    transit: 2000,
+    warehouse: '主仓库 A',
+    turnover: '高',
+    dist: { A: 90, B: 5, C: 5 },
+    sparkline: [0.1, 0.15, 0.12, 0.18, 0.15, 0.2, 0.22, 0.25, 0.23, 0.28, 0.29, 0.297],
+    history: [
+      { date: '05-22 14:00', type: '生产领料', qty: '-150', operator: '陈静' },
+      { date: '05-20 10:15', type: '生产领料', qty: '-200', operator: '陈静' },
+      { date: '05-17 15:30', type: '采购入库', qty: '+1000', operator: '张明' },
+      { date: '05-13 09:45', type: '生产领料', qty: '-300', operator: '陈静' },
+      { date: '05-10 14:20', type: '生产领料', qty: '-150', operator: '陈静' }
+    ]
+  },
+  'MAT-005': {
+    name: '不锈钢板 304',
+    spec: '2.0×1220×2440mm',
+    category: '成品',
+    qty: 320,
+    unit: '张',
+    bin: 'C-01-01',
+    avail: 280,
+    transit: 0,
+    warehouse: '成品仓库 C',
+    turnover: '中',
+    dist: { A: 10, B: 10, C: 80 },
+    sparkline: [11.0, 11.5, 11.2, 11.8, 12.0, 12.2, 12.0, 12.5, 12.3, 12.1, 12.3, 12.32],
+    history: [
+      { date: '05-22 11:30', type: '产品入库', qty: '+50', operator: '王芳' },
+      { date: '05-20 14:50', type: '销售出库', qty: '-30', operator: '李华' },
+      { date: '05-18 10:00', type: '产品入库', qty: '+80', operator: '王芳' },
+      { date: '05-15 16:15', type: '销售出库', qty: '-40', operator: '李华' },
+      { date: '05-11 09:20', type: '产品入库', qty: '+60', operator: '王芳' }
+    ]
+  },
+  'MAT-006': {
+    name: 'PLC控制器 S7-1200',
+    spec: 'CPU 1214C',
+    category: '备品备件',
+    qty: 12,
+    unit: '台',
+    bin: 'B-01-02',
+    avail: 8,
+    transit: 5,
+    warehouse: '备件仓库 B',
+    turnover: '低',
+    dist: { A: 30, B: 60, C: 10 },
+    sparkline: [5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.04, 5.04],
+    history: [
+      { date: '05-22 10:15', type: '领用出库', qty: '-1', operator: '陈静' },
+      { date: '05-15 14:30', type: '调拨入库', qty: '+2', operator: '赵强' },
+      { date: '05-01 11:00', type: '采购入库', qty: '+5', operator: '张明' }
+    ]
+  },
+  'MAT-007': {
+    name: '减速机 XWD-5',
+    spec: '速比 1:29',
+    category: '备品备件',
+    qty: 28,
+    unit: '台',
+    bin: 'A-03-04',
+    avail: 28,
+    transit: 0,
+    warehouse: '主仓库 A',
+    turnover: '低',
+    dist: { A: 70, B: 20, C: 10 },
+    sparkline: [8.8, 8.8, 8.8, 8.8, 8.8, 8.8, 8.8, 8.8, 8.8, 8.8, 8.82, 8.82],
+    history: [
+      { date: '05-22 09:45', type: '退货入库', qty: '+2', operator: '刘伟' },
+      { date: '05-18 15:30', type: '领用出库', qty: '-3', operator: '李华' },
+      { date: '05-10 11:15', type: '采购入库', qty: '+5', operator: '张明' }
+    ]
+  },
+  'MAT-008': {
+    name: '电缆 YJV 3×4mm²',
+    spec: '阻燃',
+    category: '原材料',
+    qty: 450,
+    unit: '米',
+    bin: 'A-05-01',
+    avail: 450,
+    transit: 1000,
+    warehouse: '主仓库 A',
+    turnover: '中',
+    dist: { A: 80, B: 15, C: 5 },
+    sparkline: [0.5, 0.52, 0.55, 0.54, 0.56, 0.57, 0.56, 0.58, 0.57, 0.58, 0.57, 0.576],
+    history: [
+      { date: '05-22 08:30', type: '生产领料', qty: '-200', operator: '陈静' },
+      { date: '05-19 14:00', type: '采购入库', qty: '+500', operator: '张明' },
+      { date: '05-14 10:30', type: '生产领料', qty: '-150', operator: '陈静' }
+    ]
+  }
+};
+
+// 2. 全局状态存储
+window.memos = {};
+let tableRowOrigData = [];
+let currentUIMode = 'optimal';
+let currentPresetView = 'all';
+window.drawerSparklineChart = null;
+
+// 新增：分层仓库架构定义及左侧树状栏与图表抽屉全局状态
+const warehouseHierarchy = [
+  {
+    id: 'wh-a',
+    name: '主仓库 A',
+    qty: 1849,
+    children: [
+      { id: 'wh-a-1', name: '货架区 A01', binPrefix: 'A-01', qty: 1250 },
+      { id: 'wh-a-2', name: '货架区 A02', binPrefix: 'A-02', qty: 86 },
+      { id: 'wh-a-3', name: '大件区 A03', binPrefix: 'A-03', qty: 28 },
+      { id: 'wh-a-4', name: '精细区 A04', binPrefix: 'A-04', qty: 35 },
+      { id: 'wh-a-5', name: '线缆区 A05', binPrefix: 'A-05', qty: 450 }
+    ]
+  },
+  {
+    id: 'wh-b',
+    name: '备件仓库 B',
+    qty: 54,
+    children: [
+      { id: 'wh-b-1', name: '精密货架 B01', binPrefix: 'B-01', qty: 12 },
+      { id: 'wh-b-2', name: '重载区 B03', binPrefix: 'B-03', qty: 42 }
+    ]
+  },
+  {
+    id: 'wh-c',
+    name: '成品仓库 C',
+    qty: 320,
+    children: [
+      { id: 'wh-c-1', name: '高位货架 C01', binPrefix: 'C-01', qty: 320 }
+    ]
+  }
+];
+let selectedTreeNodeId = 'wh-all';
+let currentTreeFilter = { warehouse: '', binPrefix: '' };
+let collapsedTreeNodes = { 'wh-a': false, 'wh-b': false, 'wh-c': false };
+
+let optChartWarehousePie = null;
+let optChartTop10Bar = null;
+
+
+// 3. 极智能版双状态切换系统
+function setUIMode(mode) {
+  currentUIMode = mode;
+  const body = document.body;
+  const btnClassic = document.getElementById('btn-mode-classic');
+  const btnOptimal = document.getElementById('btn-mode-optimal');
+  
+  if (mode === 'classic') {
+    body.classList.remove('ui-mode-optimal');
+    body.classList.add('ui-mode-classic');
+    
+    // 经典版按钮激活，极智版按钮常规
+    btnClassic.className = 'px-3 py-1 rounded-md text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 bg-white text-blue-600 shadow-sm border border-slate-200/50';
+    btnOptimal.className = 'px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 flex items-center gap-1.5 text-slate-500 hover:text-slate-800';
+    
+    // 关闭所有属于极智版特有的开启状态，保持经典版100%纯净度
+    closeRowDetailDrawer();
+    closeChartsDrawer();
+    clearAllSelections();
+    resetToClassicState();
+    showToast('经典旧版视图已启用', '已为您切换回传统过滤布局，表格密度及列可见性已重置。', 'info');
+  } else {
+    body.classList.remove('ui-mode-classic');
+    body.classList.add('ui-mode-optimal');
+    
+    // 极智版按钮激活，经典版按钮常规
+    btnOptimal.className = 'px-3 py-1 rounded-md text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 bg-white text-blue-600 shadow-sm border border-slate-200/50';
+    btnClassic.className = 'px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 flex items-center gap-1.5 text-slate-500 hover:text-slate-800';
+    
+    updateOptimalFilters();
+    renderWarehouseTree();
+    showToast('极智新版视图已启用', '数据过滤与浏览高级交互模式已就绪，体验秒级模糊检索与抽屉式主从分析！', 'success');
+  }
+}
+
+// 恢复经典版时的样式重置（保证旧版未被污染）
+function resetToClassicState() {
+  resetOptimalFilters();
+  setTableDensity('comfortable');
+  
+  // 恢复所有的列显示
+  const checkboxes = document.querySelectorAll('#col-selector-dropdown input[type="checkbox"]');
+  checkboxes.forEach(cb => {
+    cb.checked = true;
+  });
+  Object.keys(colClassMap).forEach(idx => {
+    const className = colClassMap[idx];
+    document.querySelectorAll(`#inventory-table .${className}`).forEach(el => {
+      el.style.display = '';
+    });
+  });
+}
+
+// 4. 高级过滤折叠控制
+function toggleAdvancedFilters() {
+  const panel = document.getElementById('advanced-filters-panel');
+  const arrow = document.getElementById('adv-filter-arrow');
+  if (!panel || !arrow) return;
+  
+  const isHidden = panel.classList.contains('hidden');
+  if (isHidden) {
+    panel.classList.remove('hidden');
+    // 平滑滑动展开微动画
+    panel.style.maxHeight = '0px';
+    panel.style.opacity = '0';
+    setTimeout(() => {
+      panel.style.transition = 'max-height 0.3s ease-out, opacity 0.3s ease-out';
+      panel.style.maxHeight = '200px';
+      panel.style.opacity = '1';
+    }, 10);
+    arrow.classList.add('rotate-180');
+  } else {
+    panel.style.maxHeight = '0px';
+    panel.style.opacity = '0';
+    setTimeout(() => {
+      panel.classList.add('hidden');
+    }, 300);
+    arrow.classList.remove('rotate-180');
+  }
+}
+
+// 5. 备份表格数据，以供快速模糊搜索时恢复高亮内容
+function initOriginalTableData() {
+  const rows = document.querySelectorAll('#inventory-tbody .table-row');
+  tableRowOrigData = [];
+  rows.forEach(row => {
+    const skuCell = row.cells[1];
+    const nameCell = row.cells[2];
+    const specCell = row.cells[3];
+    const binCell = row.cells[6];
+    tableRowOrigData.push({
+      row: row,
+      sku: row.getAttribute('data-sku'),
+      skuOrig: skuCell.innerHTML,
+      nameOrig: nameCell.innerHTML,
+      specOrig: specCell.innerHTML,
+      binOrig: binCell.innerHTML
+    });
+  });
+}
+
+// 6. 防抖即时智能模糊搜索
+let searchDebounceTimer = null;
+function handleOptimalSearch() {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    updateOptimalFilters();
+  }, 150); // 150ms 极轻防抖，确保流畅操作
+}
+
+function clearOptimalSearch() {
+  const input = document.getElementById('optimal-search-input');
+  if (input) input.value = '';
+  updateOptimalFilters();
+}
+
+// 模糊搜索关键词匹配高亮实现 (安全无损非结构化替换)
+function highlightSearchMatches(keyword) {
+  if (!keyword) {
+    tableRowOrigData.forEach(data => {
+      data.row.cells[1].innerHTML = data.skuOrig;
+      data.row.cells[2].innerHTML = data.nameOrig;
+      data.row.cells[3].innerHTML = data.specOrig;
+      data.row.cells[6].innerHTML = data.binOrig;
+    });
+    return;
+  }
+  
+  const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escapedKeyword})`, 'gi');
+  
+  tableRowOrigData.forEach(data => {
+    if (data.row.style.display !== 'none') {
+      highlightCell(data.row.cells[1], data.skuOrig, regex);
+      highlightCell(data.row.cells[2], data.nameOrig, regex);
+      highlightCell(data.row.cells[3], data.specOrig, regex);
+      highlightCell(data.row.cells[6], data.binOrig, regex);
+    }
+  });
+}
+
+function highlightCell(cell, origHtml, regex) {
+  // 避免替换 HTML Tag 如 badge 和 note-icon
+  if (origHtml.includes('<span')) {
+    const idx = origHtml.indexOf('<span');
+    const textPart = origHtml.substring(0, idx);
+    const tagPart = origHtml.substring(idx);
+    const highlightedText = textPart.replace(regex, '<mark class="bg-amber-100 text-amber-900 font-semibold px-0.5 rounded-sm">$1</mark>');
+    cell.innerHTML = highlightedText + tagPart;
+  } else {
+    cell.innerHTML = origHtml.replace(regex, '<mark class="bg-amber-100 text-amber-900 font-semibold px-0.5 rounded-sm">$1</mark>');
+  }
+}
+
+// 7. 常用预设快捷视图
+function applyPresetView(view) {
+  currentPresetView = view;
+  
+  const presets = ['all', 'alert', 'valuable', 'stagnant'];
+  presets.forEach(p => {
+    const btn = document.getElementById(`view-preset-${p}`);
+    if (btn) {
+      if (p === view) {
+        btn.className = 'px-3 py-1.5 rounded-md font-semibold bg-white text-blue-600 shadow-sm border border-slate-200/50 transition-all duration-200';
+      } else {
+        btn.className = 'px-3 py-1.5 rounded-md text-slate-600 hover:bg-white/50 transition-all duration-200 flex items-center gap-1';
+      }
+    }
+  });
+  
+  updateOptimalFilters();
+  
+  const presetLabels = { all: '全部物料', alert: '预警物料', valuable: '高货值A类', stagnant: '呆滞物料' };
+  showToast('已切换过滤视图', `当前展示预设类别：${presetLabels[view]}`, 'info');
+}
+
+// 8. 收集所有条件并触发实时过滤，联动计算合计与标签群
+function updateOptimalFilters() {
+  if (currentUIMode !== 'optimal') return;
+  
+  // 同步树状选择状态与高级筛选下拉选择 (双向绑定联动)
+  const warehouse = document.getElementById('filter-opt-warehouse').value;
+  if (warehouse !== currentTreeFilter.warehouse) {
+    currentTreeFilter.warehouse = warehouse;
+    currentTreeFilter.binPrefix = '';
+    const nodeMap = { '主仓库 A': 'wh-a', '备件仓库 B': 'wh-b', '成品仓库 C': 'wh-c' };
+    selectedTreeNodeId = warehouse ? (nodeMap[warehouse] || 'wh-all') : 'wh-all';
+    renderWarehouseTree();
+  }
+  
+  const searchInput = document.getElementById('optimal-search-input');
+  const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  
+  const category = document.getElementById('filter-opt-category').value;
+  const priceRange = document.getElementById('filter-opt-price').value;
+  
+  let matchCount = 0;
+  
+  tableRowOrigData.forEach(item => {
+    const row = item.row;
+    const sku = item.sku;
+    const rowWarehouse = row.getAttribute('data-warehouse');
+    const rowCategory = row.getAttribute('data-category');
+    const rowAmount = parseFloat(row.getAttribute('data-amount')) || 0;
+    const rowAlert = row.getAttribute('data-alert');
+    
+    // 模糊检索匹配
+    let isSearchMatched = true;
+    if (keyword) {
+      const skuText = sku.toLowerCase();
+      const nameText = row.cells[2].textContent.toLowerCase();
+      const specText = row.cells[3].textContent.toLowerCase();
+      const binText = row.cells[6].textContent.toLowerCase();
+      isSearchMatched = skuText.includes(keyword) || 
+                        nameText.includes(keyword) || 
+                        specText.includes(keyword) || 
+                        binText.includes(keyword);
+    }
+    
+    // 预设视图匹配
+    let isPresetMatched = true;
+    if (currentPresetView === 'alert') {
+      isPresetMatched = (rowAlert === 'yes' || sku === 'MAT-008');
+    } else if (currentPresetView === 'valuable') {
+      isPresetMatched = (rowAmount >= 100000);
+    } else if (currentPresetView === 'stagnant') {
+      isPresetMatched = (sku === 'MAT-006' || sku === 'MAT-007');
+    }
+    
+    // 仓库与库区过滤匹配 (联动树状左边栏)
+    let isWarehouseMatched = true;
+    if (currentTreeFilter.warehouse) {
+      isWarehouseMatched = (rowWarehouse === currentTreeFilter.warehouse);
+      if (isWarehouseMatched && currentTreeFilter.binPrefix) {
+        const binText = row.cells[6].textContent.trim();
+        isWarehouseMatched = binText.startsWith(currentTreeFilter.binPrefix);
+      }
+    }
+    
+    // 分类过滤匹配
+    let isCategoryMatched = true;
+    if (category) {
+      isCategoryMatched = (rowCategory === category);
+    }
+    
+    // 金额区间过滤匹配
+    let isPriceMatched = true;
+    if (priceRange) {
+      if (priceRange === 'low') {
+        isPriceMatched = (rowAmount < 10000);
+      } else if (priceRange === 'medium') {
+        isPriceMatched = (rowAmount >= 10000 && rowAmount < 100000);
+      } else if (priceRange === 'high') {
+        isPriceMatched = (rowAmount >= 100000);
+      }
+    }
+    
+    const isVisible = isSearchMatched && isPresetMatched && isWarehouseMatched && isCategoryMatched && isPriceMatched;
+    
+    if (isVisible) {
+      row.style.display = '';
+      matchCount++;
+    } else {
+      row.style.display = 'none';
+      // 隐藏的行需取消多选状态，防止隐蔽勾选批量误操作
+      const cb = row.querySelector('.row-checkbox');
+      if (cb) {
+        cb.checked = false;
+        row.classList.remove('selected-row');
+      }
+    }
+  });
+  
+  highlightSearchMatches(keyword);
+  
+  // 清除按钮可见性
+  const clearBtn = document.getElementById('btn-clear-search');
+  if (clearBtn) {
+    if (keyword) clearBtn.classList.remove('hidden');
+    else clearBtn.classList.add('hidden');
+  }
+  
+  // 重新计算可见物料金额与库存总计
+  recalculateFooterSums();
+  
+  // 更新右上角记录总数
+  const countEl = document.getElementById('realtime-record-count');
+  if (countEl) countEl.textContent = matchCount;
+  
+  // 渲染活动中的过滤条件标签群
+  renderFilterTags();
+  
+  // 更新批量浮动面板状态
+  updateBatchActionBar();
+  
+  // 如果图表分析抽屉正开启，则同步重绘图表，实现实时过滤统计联动
+  const chartsDrawer = document.getElementById('charts-drawer');
+  if (chartsDrawer && chartsDrawer.classList.contains('show')) {
+    initOptimalCharts();
+  }
+}
+
+// 8.1 经典旧版查询与重置函数
+function applyClassicFilters() {
+  const wh = document.getElementById('classic-filter-warehouse').value;
+  const search = document.getElementById('classic-filter-search').value.trim().toLowerCase();
+  const cat = document.getElementById('classic-filter-category').value;
+  
+  const rows = document.querySelectorAll('#inventory-tbody .table-row');
+  rows.forEach(row => {
+    const rowWarehouse = row.getAttribute('data-warehouse');
+    const rowCategory = row.getAttribute('data-category');
+    const sku = row.getAttribute('data-sku').toLowerCase();
+    const name = row.cells[2].textContent.toLowerCase();
+    
+    let isWarehouseMatched = (wh === '全部仓库' || rowWarehouse === wh);
+    let isCategoryMatched = (cat === '全部分类' || rowCategory === cat);
+    let isSearchMatched = (!search || sku.includes(search) || name.includes(search));
+    
+    if (isWarehouseMatched && isCategoryMatched && isSearchMatched) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+  
+  showToast('已应用经典版筛选', '筛选结果已更新', 'success');
+}
+
+function resetClassicFilters() {
+  document.getElementById('classic-filter-warehouse').selectedIndex = 0;
+  document.getElementById('classic-filter-search').value = '';
+  document.getElementById('classic-filter-category').selectedIndex = 0;
+  
+  const rows = document.querySelectorAll('#inventory-tbody .table-row');
+  rows.forEach(row => {
+    row.style.display = '';
+  });
+  
+  showToast('已重置经典版筛选', '所有物料已重新展示', 'info');
+}
+
+// 8.2 极智新版高级重置函数
+function resetOptimalFilters() {
+  const searchInput = document.getElementById('optimal-search-input');
+  if (searchInput) searchInput.value = '';
+  
+  const optWarehouse = document.getElementById('filter-opt-warehouse');
+  if (optWarehouse) optWarehouse.value = '';
+  
+  const optCategory = document.getElementById('filter-opt-category');
+  if (optCategory) optCategory.value = '';
+  
+  const optPrice = document.getElementById('filter-opt-price');
+  if (optPrice) optPrice.value = '';
+  
+  selectedTreeNodeId = 'wh-all';
+  currentTreeFilter = { warehouse: '', binPrefix: '' };
+  currentPresetView = 'all';
+  
+  const presets = ['all', 'alert', 'valuable', 'stagnant'];
+  presets.forEach(p => {
+    const btn = document.getElementById(`view-preset-${p}`);
+    if (btn) {
+      if (p === 'all') {
+        btn.className = 'px-3 py-1.5 rounded-md font-semibold bg-white text-blue-600 shadow-sm border border-slate-200/50 transition-all duration-200';
+      } else {
+        btn.className = 'px-3 py-1.5 rounded-md text-slate-600 hover:bg-white/50 transition-all duration-200 flex items-center gap-1';
+      }
+    }
+  });
+  
+  updateOptimalFilters();
+  renderWarehouseTree();
+}
+
+// 8.3 极智新版图表可视化分析抽屉控制
+function openChartsDrawer() {
+  if (currentUIMode !== 'optimal') return;
+  document.getElementById('charts-drawer-backdrop').classList.add('show');
+  document.getElementById('charts-drawer').classList.add('show');
+  
+  // 延迟初始化图表以解决 Canvas 测量容器隐藏宽高的问题
+  setTimeout(() => {
+    initOptimalCharts();
+  }, 250);
+}
+
+function closeChartsDrawer() {
+  document.getElementById('charts-drawer-backdrop').classList.remove('show');
+  document.getElementById('charts-drawer').classList.remove('show');
+}
+
+function initOptimalCharts() {
+  const pieCtx = document.getElementById('opt-chart-warehouse-pie');
+  const barCtx = document.getElementById('opt-chart-top10-bar');
+  if (!pieCtx || !barCtx) return;
+
+  const visibleRows = Array.from(document.querySelectorAll('#inventory-tbody .table-row')).filter(r => r.style.display !== 'none');
+  
+  // 1. 各仓库库存金额占比
+  const whAmounts = { '主仓库 A': 0, '备件仓库 B': 0, '成品仓库 C': 0 };
+  visibleRows.forEach(row => {
+    const wh = row.getAttribute('data-warehouse');
+    const amt = parseFloat(row.getAttribute('data-amount')) || 0;
+    if (wh && whAmounts[wh] !== undefined) {
+      whAmounts[wh] += amt;
+    }
+  });
+
+  const pieLabels = ['主仓库 A', '备件仓库 B', '成品仓库 C'];
+  const pieDataValues = [whAmounts['主仓库 A'], whAmounts['备件仓库 B'], whAmounts['成品仓库 C']];
+
+  // 2. 库存金额 Top 10 物料
+  const items = visibleRows.map(row => {
+    const sku = row.getAttribute('data-sku');
+    const amt = parseFloat(row.getAttribute('data-amount')) || 0;
+    const name = row.cells[2].textContent.split(' ')[0] || ''; 
+    return { label: name + '\n' + sku, amount: amt };
+  });
+  items.sort((a, b) => b.amount - a.amount);
+  const top10 = items.slice(0, 10);
+  const barLabels = top10.map(item => item.label);
+  const barDataValues = top10.map(item => item.amount);
+
+  if (optChartWarehousePie) {
+    optChartWarehousePie.data.datasets[0].data = pieDataValues;
+    optChartWarehousePie.update();
+  } else {
+    optChartWarehousePie = new Chart(pieCtx, {
+      type: 'doughnut',
+      data: {
+        labels: pieLabels,
+        datasets: [{
+          data: pieDataValues,
+          backgroundColor: [chartColors.blue, chartColors.amber, chartColors.green],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 12, font: { size: 11 } }
+          }
+        }
+      }
+    });
+  }
+
+  if (optChartTop10Bar) {
+    optChartTop10Bar.data.labels = barLabels;
+    optChartTop10Bar.data.datasets[0].data = barDataValues;
+    optChartTop10Bar.update();
+  } else {
+    optChartTop10Bar = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: barLabels,
+        datasets: [{
+          label: '库存金额(¥)',
+          data: barDataValues,
+          backgroundColor: chartColors.blue,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { ticks: { callback: v => (v/1000) + 'K', font: { size: 10 } } },
+          y: { ticks: { font: { size: 10 } } }
+        }
+      }
+    });
+  }
+}
+
+// 8.4 分层型树状仓库左边栏渲染与交互
+function renderWarehouseTree() {
+  const container = document.getElementById('warehouse-tree-container');
+  if (!container) return;
+  
+  let html = '';
+  
+  // "全部库区" 根节点
+  const allSelected = (selectedTreeNodeId === 'wh-all' || selectedTreeNodeId === '') ? 'bg-blue-50 text-blue-600 font-semibold border-r-2 border-blue-500' : 'hover:bg-slate-50 text-slate-700';
+  html += `
+    <div class="flex items-center justify-between p-2 rounded cursor-pointer transition-all ${allSelected}" onclick="resetTreeFilter()">
+      <div class="flex items-center gap-2 min-w-0">
+        <svg class="w-4 h-4 shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        <span class="truncate font-medium">全部库区</span>
+      </div>
+      <span class="badge bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full text-[10px]">2,223</span>
+    </div>
+    <div class="h-[1px] bg-slate-100 my-1"></div>
+  `;
+  
+  warehouseHierarchy.forEach(wh => {
+    const parentId = wh.id;
+    const isCollapsed = collapsedTreeNodes[parentId] || false;
+    const isSelected = selectedTreeNodeId === parentId;
+    const parentHighlight = isSelected ? 'bg-blue-50 text-blue-600 font-semibold border-r-2 border-blue-500' : 'hover:bg-slate-50 text-slate-700';
+    
+    const arrowIcon = isCollapsed 
+      ? `<svg class="w-3 h-3 text-slate-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>`
+      : `<svg class="w-3 h-3 text-slate-400 transition-transform duration-200 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>`;
+      
+    html += `
+      <div class="flex flex-col">
+        <!-- 父仓库行 -->
+        <div class="flex items-center justify-between p-2 rounded cursor-pointer transition-all ${parentHighlight}" onclick="selectTreeNode('${parentId}', '${wh.name}', '', event)">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="w-4 h-4 flex items-center justify-center cursor-pointer hover:bg-slate-200/50 rounded shrink-0" onclick="toggleParentCollapse('${parentId}', event)">
+              ${arrowIcon}
+            </span>
+            <svg class="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+            <span class="truncate font-medium">${wh.name}</span>
+          </div>
+          <span class="badge bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full text-[10px] shrink-0">${wh.qty.toLocaleString()}</span>
+        </div>
+        
+        <!-- 子库区列表 -->
+        <div class="flex flex-col ml-3 pl-3.5 border-l border-slate-100 mt-0.5 space-y-0.5 ${isCollapsed ? 'hidden' : ''}">
+    `;
+    
+    wh.children.forEach(child => {
+      const childSelected = selectedTreeNodeId === child.id;
+      const childHighlight = childSelected ? 'bg-blue-50/70 text-blue-600 font-semibold border-r-2 border-blue-500' : 'hover:bg-slate-50 text-slate-600';
+      
+      html += `
+        <div class="flex items-center justify-between p-1.5 rounded cursor-pointer transition-all ${childHighlight}" onclick="selectTreeNode('${child.id}', '${wh.name}', '${child.binPrefix}', event)">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <span class="truncate text-[11px]">${child.name}</span>
+          </div>
+          <span class="badge bg-slate-50 text-slate-500 px-1 py-0.2 rounded-full text-[9px] scale-90 shrink-0">${child.qty.toLocaleString()}</span>
+        </div>
+      `;
+    });
+    
+    html += `
+        </div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+}
+
+function toggleParentCollapse(parentId, event) {
+  if (event) event.stopPropagation();
+  collapsedTreeNodes[parentId] = !collapsedTreeNodes[parentId];
+  renderWarehouseTree();
+}
+
+function selectTreeNode(nodeId, warehouseName, binPrefix, event) {
+  if (event) event.stopPropagation();
+  selectedTreeNodeId = nodeId;
+  currentTreeFilter.warehouse = warehouseName;
+  currentTreeFilter.binPrefix = binPrefix;
+  
+  const dropdown = document.getElementById('filter-opt-warehouse');
+  if (dropdown) {
+    dropdown.value = warehouseName;
+  }
+  
+  updateOptimalFilters();
+  renderWarehouseTree();
+  
+  if (binPrefix) {
+    showToast('切换筛选区域', `当前过滤：${warehouseName} - ${binPrefix} 库区`, 'success');
+  } else {
+    showToast('切换筛选仓库', `当前过滤：${warehouseName}`, 'success');
+  }
+}
+
+function resetTreeFilter() {
+  selectedTreeNodeId = 'wh-all';
+  currentTreeFilter = { warehouse: '', binPrefix: '' };
+  
+  const dropdown = document.getElementById('filter-opt-warehouse');
+  if (dropdown) {
+    dropdown.value = '';
+  }
+  
+  updateOptimalFilters();
+  renderWarehouseTree();
+  showToast('重置库区筛选', '已显示所有仓库库位数据', 'info');
+}
+
+
+// 9. 生效中已选条件过滤标签管理
+function renderFilterTags() {
+  const container = document.getElementById('filter-tags-container');
+  const list = document.getElementById('filter-tags-list');
+  if (!container || !list) return;
+  
+  list.innerHTML = '';
+  let activeCount = 0;
+  
+  function addTag(text, clearFnStr) {
+    activeCount++;
+    const tag = document.createElement('div');
+    tag.className = 'flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200/80 text-slate-600 px-2 py-0.5 rounded shadow-sm transition-all text-xs font-semibold';
+    tag.innerHTML = `
+      <span>${text}</span>
+      <button class="w-3.5 h-3.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-red-500 font-bold transition-all flex items-center justify-center text-[10px]" onclick="${clearFnStr}">&times;</button>
+    `;
+    list.appendChild(tag);
+  }
+  
+  // 智能检索词
+  const query = document.getElementById('optimal-search-input').value.trim();
+  if (query) {
+    addTag(`检索: "${query}"`, 'clearOptimalSearch()');
+  }
+  
+  // 仓库
+  const wh = document.getElementById('filter-opt-warehouse').value;
+  if (wh) {
+    addTag(`仓库: ${wh}`, 'clearWarehouseFilter()');
+  }
+  
+  // 分类
+  const cat = document.getElementById('filter-opt-category').value;
+  if (cat) {
+    addTag(`分类: ${cat}`, 'clearCategoryFilter()');
+  }
+  
+  // 金额
+  const pr = document.getElementById('filter-opt-price').value;
+  if (pr) {
+    const prNames = { low: '1万以下', medium: '1万-10万', high: '10万以上' };
+    addTag(`库存金额: ${prNames[pr]}`, 'clearPriceFilter()');
+  }
+  
+  // 预设视图
+  if (currentPresetView !== 'all') {
+    const presetNames = { alert: '安全预警', valuable: '高值A类', stagnant: '呆滞品' };
+    addTag(`视图预设: ${presetNames[currentPresetView]}`, 'applyPresetView("all")');
+  }
+  
+  if (activeCount > 0) {
+    container.classList.remove('hidden');
+    container.classList.add('flex');
+  } else {
+    container.classList.add('hidden');
+    container.classList.remove('flex');
+  }
+}
+
+function clearWarehouseFilter() {
+  document.getElementById('filter-opt-warehouse').value = '';
+  updateOptimalFilters();
+}
+
+function clearCategoryFilter() {
+  document.getElementById('filter-opt-category').value = '';
+  updateOptimalFilters();
+}
+
+function clearPriceFilter() {
+  document.getElementById('filter-opt-price').value = '';
+  updateOptimalFilters();
+}
+
+// 10. 智能极低延迟动态行合计汇总
+function recalculateFooterSums() {
+  const visibleRows = Array.from(document.querySelectorAll('#inventory-tbody .table-row')).filter(r => r.style.display !== 'none');
+  
+  let totalQty = 0;
+  let totalAvail = 0;
+  let totalAssigned = 0;
+  let totalTransit = 0;
+  let totalAmount = 0;
+  
+  visibleRows.forEach(row => {
+    const qty = parseInt(row.getAttribute('data-qty'), 10) || 0;
+    totalQty += qty;
+    
+    const avail = parseInt(row.querySelector('.col-avail').textContent.replace(/,/g, ''), 10) || 0;
+    totalAvail += avail;
+    
+    const assigned = parseInt(row.querySelector('.col-assigned').textContent.replace(/,/g, ''), 10) || 0;
+    totalAssigned += assigned;
+    
+    const transit = parseInt(row.querySelector('.col-intransit').textContent.replace(/,/g, ''), 10) || 0;
+    totalTransit += transit;
+    
+    const amount = parseFloat(row.getAttribute('data-amount')) || 0;
+    totalAmount += amount;
+  });
+  
+  const format = (num) => num.toLocaleString('en-US');
+  const formatDec = (num) => num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  
+  document.getElementById('opt-total-qty').textContent = format(totalQty);
+  document.getElementById('opt-total-avail').textContent = format(totalAvail);
+  document.getElementById('opt-total-assigned').textContent = format(totalAssigned);
+  document.getElementById('opt-total-intransit').textContent = format(totalTransit);
+  document.getElementById('opt-total-amount').textContent = formatDec(totalAmount);
+}
+
+// 11. 自定义列显示逻辑
+const colClassMap = {
+  3: 'col-spec',
+  4: 'col-unit',
+  6: 'col-bin',
+  8: 'col-avail',
+  9: 'col-assigned',
+  10: 'col-intransit',
+  13: 'col-lastupdate'
+};
+
+function toggleTableCol(colIdx, checkbox) {
+  const className = colClassMap[colIdx];
+  if (!className) return;
+  
+  const cells = document.querySelectorAll(`#inventory-table .${className}`);
+  cells.forEach(cell => {
+    if (checkbox.checked) {
+      cell.style.display = '';
+    } else {
+      cell.style.display = 'none';
+    }
+  });
+  
+  showToast('展示列已配置', `已${checkbox.checked ? '启用' : '隐藏'}对应列显示`, 'success');
+}
+
+function toggleColumnSelector(event) {
+  event.stopPropagation();
+  const dropdown = document.getElementById('col-selector-dropdown');
+  if (dropdown) dropdown.classList.toggle('hidden');
+}
+
+// 点击空白关闭列选择下拉气泡
+document.addEventListener('click', (e) => {
+  const container = document.getElementById('col-selector-container');
+  if (container && !container.contains(e.target)) {
+    const dropdown = document.getElementById('col-selector-dropdown');
+    if (dropdown) dropdown.classList.add('hidden');
+  }
+});
+
+// 12. 自定义表格显示密度
+function setTableDensity(density) {
+  const tbl = document.getElementById('inventory-table');
+  if (!tbl) return;
+  
+  tbl.classList.remove('density-compact', 'density-comfortable', 'density-spacious');
+  tbl.classList.add(`density-${density}`);
+  
+  const densities = ['compact', 'comfortable', 'spacious'];
+  densities.forEach(d => {
+    const btn = document.getElementById(`btn-density-${d}`);
+    if (btn) {
+      if (d === density) {
+        btn.className = 'p-1 rounded bg-white text-blue-600 shadow-sm border border-slate-200/50 transition-all';
+      } else {
+        btn.className = 'p-1 rounded hover:bg-white/60 text-slate-600 transition-all';
+      }
+    }
+  });
+}
+
+// 13. 主从详情滑动抽屉装载与动画
+function handleRowClick(row, sku, event) {
+  if (currentUIMode !== 'optimal') return;
+  
+  // 剔除复选框和快捷分析点击，避免冲突
+  if (event.target.tagName === 'INPUT' || event.target.closest('button')) {
+    return;
+  }
+  
+  // 高亮显示当前点击行
+  document.querySelectorAll('#inventory-tbody .table-row').forEach(r => r.classList.remove('bg-blue-50/50'));
+  row.classList.add('bg-blue-50/50');
+  
+  openRowDetailDrawer(sku);
+}
+
+function openRowDetailDrawer(sku) {
+  if (currentUIMode !== 'optimal') return;
+  
+  const data = skuMockData[sku];
+  if (!data) return;
+  
+  // 1. 设置内容
+  document.getElementById('drawer-sku').textContent = sku;
+  document.getElementById('drawer-mat-name').textContent = data.name;
+  document.getElementById('drawer-mat-spec').textContent = data.spec;
+  document.getElementById('drawer-mat-category').textContent = data.category;
+  document.getElementById('drawer-mat-qty').innerHTML = `${data.qty.toLocaleString()} <span class="text-xs font-normal text-slate-400">${data.unit}</span>`;
+  document.getElementById('drawer-mat-bin').textContent = data.bin;
+  document.getElementById('drawer-mat-avail').textContent = data.avail.toLocaleString();
+  document.getElementById('drawer-mat-transit').textContent = data.transit.toLocaleString();
+  document.getElementById('drawer-turnover-tag').textContent = `周转速度: ${data.turnover}`;
+  
+  // 2. 加载即时备注
+  const memoText = window.memos[sku] || '';
+  document.getElementById('drawer-memo').value = memoText;
+  
+  // 3. 仓储占比进度条动画
+  const barA = document.getElementById('drawer-bar-a');
+  const barB = document.getElementById('drawer-bar-b');
+  const barC = document.getElementById('drawer-bar-c');
+  const pctA = document.getElementById('drawer-bar-a-pct');
+  const pctB = document.getElementById('drawer-bar-b-pct');
+  const pctC = document.getElementById('drawer-bar-c-pct');
+  
+  pctA.textContent = `${data.dist.A}%`;
+  pctB.textContent = `${data.dist.B}%`;
+  pctC.textContent = `${data.dist.C}%`;
+  
+  barA.style.width = '0%';
+  barB.style.width = '0%';
+  barC.style.width = '0%';
+  setTimeout(() => {
+    barA.style.width = `${data.dist.A}%`;
+    barB.style.width = `${data.dist.B}%`;
+    barC.style.width = `${data.dist.C}%`;
+  }, 100);
+  
+  // 4. 组装流水历史
+  const historyTbody = document.getElementById('drawer-history-tbody');
+  historyTbody.innerHTML = '';
+  data.history.forEach(log => {
+    const isIncome = log.type.includes('入') || log.type.includes('盘盈');
+    const badgeClass = isIncome ? 'bg-green-50 text-green-700 border border-green-200/50' : 'bg-red-50 text-red-700 border border-red-200/50';
+    const numClass = isIncome ? 'text-green-600 font-bold' : 'text-red-600 font-bold';
+    
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-slate-50 transition-colors';
+    tr.innerHTML = `
+      <td class="px-3 py-2 font-mono text-[10px] text-slate-500">${log.date}</td>
+      <td class="px-3 py-2"><span class="px-1.5 py-0.5 rounded text-[9px] font-semibold ${badgeClass}">${log.type}</span></td>
+      <td class="px-3 py-2 text-right ${numClass} font-mono">${log.qty}</td>
+      <td class="px-3 py-2 text-slate-500 text-[10px]">${log.operator}</td>
+    `;
+    historyTbody.appendChild(tr);
+  });
+  
+  // 5. 渲染 30 天走势 Chart.js Sparkline
+  renderDrawerSparkline(data.sparkline);
+  
+  // 6. 展示抽屉 (Slide-in)
+  document.getElementById('detail-drawer-backdrop').classList.add('show');
+  document.getElementById('detail-drawer').classList.add('show');
+}
+
+function closeRowDetailDrawer() {
+  document.getElementById('detail-drawer-backdrop').classList.remove('show');
+  document.getElementById('detail-drawer').classList.remove('show');
+  
+  // 清空行高亮
+  document.querySelectorAll('#inventory-tbody .table-row').forEach(r => r.classList.remove('bg-blue-50/50'));
+}
+
+// 侧滑抽屉走势图动态渲染
+function renderDrawerSparkline(dataset) {
+  const ctx = document.getElementById('chart-drawer-sparkline').getContext('2d');
+  
+  if (window.drawerSparklineChart) {
+    window.drawerSparklineChart.destroy();
+  }
+  
+  window.drawerSparklineChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array.from({length: dataset.length}, (_, i) => `${i + 1}日`),
+      datasets: [{
+        data: dataset,
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59, 130, 246, 0.05)',
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 5,
+        pointBackgroundColor: '#3b82f6',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 1.5,
+        fill: true,
+        tension: 0.35
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            label: (ctx) => ` 库存值: ¥${ctx.parsed.y} 万`
+          }
+        }
+      },
+      scales: {
+        x: {
+          display: true,
+          grid: { display: false },
+          ticks: { font: { size: 9 }, color: '#94a3b8' }
+        },
+        y: {
+          display: true,
+          grid: { color: '#f1f5f9' },
+          ticks: { font: { size: 9 }, color: '#94a3b8' }
+        }
+      }
+    }
+  });
+}
+
+// 14. 批量操作与底部浮动控制条
+function handleRowSelect(checkbox, event) {
+  event.stopPropagation();
+  const tr = checkbox.closest('.table-row');
+  if (checkbox.checked) {
+    tr.classList.add('selected-row');
+  } else {
+    tr.classList.remove('selected-row');
+  }
+  updateBatchActionBar();
+}
+
+function toggleSelectAllRows(selectAllCheckbox) {
+  // 仅操作当前显示在表中的可见行，非常安全
+  const visibleRows = Array.from(document.querySelectorAll('#inventory-tbody .table-row')).filter(r => r.style.display !== 'none');
+  
+  visibleRows.forEach(row => {
+    const cb = row.querySelector('.row-checkbox');
+    if (cb) {
+      cb.checked = selectAllCheckbox.checked;
+      if (selectAllCheckbox.checked) {
+        row.classList.add('selected-row');
+      } else {
+        row.classList.remove('selected-row');
+      }
+    }
+  });
+  updateBatchActionBar();
+}
+
+function updateBatchActionBar() {
+  const visibleRows = Array.from(document.querySelectorAll('#inventory-tbody .table-row')).filter(r => r.style.display !== 'none');
+  const checkedRows = visibleRows.filter(row => {
+    const cb = row.querySelector('.row-checkbox');
+    return cb && cb.checked;
+  });
+  
+  const count = checkedRows.length;
+  const bar = document.getElementById('batch-action-bar');
+  const countBadge = document.getElementById('batch-select-count');
+  
+  if (countBadge) countBadge.textContent = count;
+  
+  // 更新全选框勾选状态
+  const selectAllCb = document.getElementById('select-all-rows');
+  if (selectAllCb) {
+    selectAllCb.checked = (visibleRows.length > 0 && checkedRows.length === visibleRows.length);
+  }
+  
+  if (bar) {
+    if (count > 0) {
+      bar.classList.add('show');
+    } else {
+      bar.classList.remove('show');
+    }
+  }
+}
+
+function clearAllSelections() {
+  document.querySelectorAll('#inventory-tbody .row-checkbox').forEach(cb => {
+    cb.checked = false;
+    cb.closest('.table-row').classList.remove('selected-row');
+  });
+  
+  const selectAllCb = document.getElementById('select-all-rows');
+  if (selectAllCb) selectAllCb.checked = false;
+  
+  updateBatchActionBar();
+}
+
+// 15. 即时仓管备忘录同步 (高保真交互，在表格行中动态标记出黄色便签图标)
+function initMemoHandlers() {
+  const textarea = document.getElementById('drawer-memo');
+  if (!textarea) return;
+  
+  textarea.addEventListener('input', (e) => {
+    const sku = document.getElementById('drawer-sku').textContent;
+    const memoVal = e.target.value;
+    window.memos[sku] = memoVal;
+    
+    // 动态同步更新行状态并植入交互图标与 tooltip 悬停提示
+    const row = document.querySelector(`#inventory-tbody .table-row[data-sku="${sku}"]`);
+    if (row) {
+      row.setAttribute('data-memo', memoVal);
+      const nameCell = row.cells[2];
+      const data = skuMockData[sku];
+      
+      if (memoVal.trim()) {
+        if (!nameCell.querySelector('.memo-note-indicator')) {
+          nameCell.innerHTML = `
+            ${data.name} 
+            <span class="memo-note-indicator inline-flex items-center text-amber-500 ml-1.5 cursor-help" title="备注: ${memoVal.trim()}">
+              <svg class="w-3.5 h-3.5 inline animate-pulse-subtle" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.829z"/></svg>
+            </span>
+            ${data.alert === 'yes' ? ' <span class="badge badge-red ml-1">安全警报</span>' : ''}
+            ${sku === 'MAT-008' ? ' <span class="badge badge-yellow ml-1">超储警报</span>' : ''}
+          `;
+        } else {
+          // 直接更新 tooltip 悬浮文本
+          const ind = nameCell.querySelector('.memo-note-indicator');
+          if (ind) ind.setAttribute('title', `备注: ${memoVal.trim()}`);
+        }
+      } else {
+        // 清空时还原
+        nameCell.innerHTML = `
+          ${data.name}
+          ${data.alert === 'yes' ? ' <span class="badge badge-red ml-1">安全警报</span>' : ''}
+          ${sku === 'MAT-008' ? ' <span class="badge badge-yellow ml-1">超储警报</span>' : ''}
+        `;
+      }
+      
+      // 更新已备份的原版内容以供后续模糊过滤继续生效
+      const origData = tableRowOrigData.find(item => item.sku === sku);
+      if (origData) {
+        origData.nameOrig = nameCell.innerHTML;
+      }
+    }
+  });
+}
+
+// 16. 高级卡片式筛选联动 (Metric Card Filtering)
+function initMetricCardClickListeners() {
+  const cards = document.querySelectorAll('main > div.grid.grid-cols-4.gap-4.mb-4 > div');
+  if (cards.length === 4) {
+    // 绑定点击光标样式
+    cards[0].style.cursor = 'pointer';
+    cards[0].title = '点击展示全部物料';
+    cards[0].addEventListener('click', () => applyPresetView('all'));
+    
+    cards[1].style.cursor = 'pointer';
+    cards[1].title = '点击筛选高值A类物料';
+    cards[1].addEventListener('click', () => applyPresetView('valuable'));
+    
+    cards[2].style.cursor = 'pointer';
+    cards[2].title = '点击展示全部物料';
+    cards[2].addEventListener('click', () => applyPresetView('all'));
+    
+    cards[3].style.cursor = 'pointer';
+    cards[3].title = '点击快速查看预警物料';
+    cards[3].addEventListener('click', () => applyPresetView('alert'));
+    
+    // 加入优雅的过渡动画扩展
+    cards.forEach((card, i) => {
+      card.className += ' hover:shadow-md hover:border-blue-400 transition-all duration-200';
+    });
+  }
+}
+
+// 17. 排序逻辑实现
+let skuSortDirection = 'asc';
+function sortTableBySku() {
+  if (currentUIMode !== 'optimal') return;
+  const tbody = document.getElementById('inventory-tbody');
+  const rows = Array.from(tbody.querySelectorAll('.table-row'));
+  
+  rows.sort((a, b) => {
+    const skuA = a.getAttribute('data-sku');
+    const skuB = b.getAttribute('data-sku');
+    return skuSortDirection === 'asc' ? skuA.localeCompare(skuB) : skuB.localeCompare(skuA);
+  });
+  
+  skuSortDirection = skuSortDirection === 'asc' ? 'desc' : 'asc';
+  rows.forEach(r => tbody.appendChild(r));
+  showToast('表格已重新排序', `按 物料编码 ${skuSortDirection === 'asc' ? '逆序' : '顺序'} 重新排布`, 'info');
+}
+
+let qtySortDirection = 'desc';
+function sortTableByQty() {
+  if (currentUIMode !== 'optimal') return;
+  const tbody = document.getElementById('inventory-tbody');
+  const rows = Array.from(tbody.querySelectorAll('.table-row'));
+  
+  rows.sort((a, b) => {
+    const qtyA = parseInt(a.getAttribute('data-qty'), 10) || 0;
+    const qtyB = parseInt(b.getAttribute('data-qty'), 10) || 0;
+    return qtySortDirection === 'asc' ? qtyA - qtyB : qtyB - qtyA;
+  });
+  
+  qtySortDirection = qtySortDirection === 'asc' ? 'desc' : 'asc';
+  rows.forEach(r => tbody.appendChild(r));
+  showToast('表格已重新排序', `按 库存数量 ${qtySortDirection === 'asc' ? '升序' : '降序'} 重新排布`, 'info');
+}
+
+// 18. 企业级 Toast 高光交互组件实现
+function showToast(title, message, type = 'success') {
+  const container = document.getElementById('toast-container') || createToastContainer();
+  const toast = document.createElement('div');
+  toast.className = 'transform translate-y-2 opacity-0 transition-all duration-300 ease-out bg-slate-900/95 backdrop-blur-md text-white rounded-xl p-4 shadow-xl border border-slate-800 flex items-start gap-3 w-80 max-w-sm';
+  
+  const iconColors = {
+    success: 'text-green-500 bg-green-500/10 border-green-500/20',
+    info: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
+    warning: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
+    error: 'text-red-500 bg-red-500/10 border-red-500/20'
+  };
+  
+  const icons = {
+    success: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+    info: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+    warning: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>',
+    error: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
+  };
+
+  toast.innerHTML = `
+    <div class="p-1 rounded-lg border ${iconColors[type]} flex-shrink-0">
+      ${icons[type]}
+    </div>
+    <div class="flex-1">
+      <h5 class="text-xs font-bold text-white">${title}</h5>
+      <p class="text-[10px] text-slate-400 mt-0.5 leading-relaxed">${message}</p>
+    </div>
+    <button class="text-slate-500 hover:text-white transition-colors text-sm font-semibold flex-shrink-0 select-none">&times;</button>
+  `;
+  
+  const closeBtn = toast.querySelector('button');
+  closeBtn.addEventListener('click', () => {
+    toast.classList.add('opacity-0', 'translate-y-[-10px]');
+    setTimeout(() => toast.remove(), 300);
+  });
+  
+  container.appendChild(toast);
+  
+  // 丝滑展现
+  setTimeout(() => {
+    toast.classList.remove('translate-y-2', 'opacity-0');
+  }, 10);
+  
+  // 4s 自动关闭
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.classList.add('opacity-0', 'translate-y-[-10px]');
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, 4000);
+}
+
+function createToastContainer() {
+  const container = document.createElement('div');
+  container.id = 'toast-container';
+  container.className = 'fixed top-16 right-6 z-[2000] flex flex-col gap-2.5';
+  document.body.appendChild(container);
+  return container;
+}
+
+// 19. 批量操作行为响应 Mock 响应
+function handleBatchExport() {
+  const visibleRows = Array.from(document.querySelectorAll('#inventory-tbody .table-row')).filter(r => r.style.display !== 'none');
+  const checked = visibleRows.filter(row => {
+    const cb = row.querySelector('.row-checkbox');
+    return cb && cb.checked;
+  });
+  
+  const skus = checked.map(r => r.getAttribute('data-sku'));
+  showToast('批量导出成功！', `已成功将物料编码：[ ${skus.join(', ')} ] 的库存明细信息汇总打包，并在下载列表生成 Excel 报表。`, 'success');
+  clearAllSelections();
+}
+
+function handleBatchTransfer() {
+  const visibleRows = Array.from(document.querySelectorAll('#inventory-tbody .table-row')).filter(r => r.style.display !== 'none');
+  const checked = visibleRows.filter(row => {
+    const cb = row.querySelector('.row-checkbox');
+    return cb && cb.checked;
+  });
+  
+  showToast('批量跨仓调拨申请成功', `已提交共 ${checked.length} 项物料的跨仓调度流，已自动分发至物流总台，请在“出入库台账”查看调拨单据进度。`, 'success');
+  clearAllSelections();
+}
+
+// 20. 抽屉内快捷指令 Mock
+function handleDrawerAdjust() {
+  const sku = document.getElementById('drawer-sku').textContent;
+  showToast('库存调整流程启动', `物料 ${sku} 偏差调整任务已派发给当班仓管员，请注意核验系统库存与物理账目差异！`, 'info');
+}
+
+function handleDrawerAllocate() {
+  const sku = document.getElementById('drawer-sku').textContent;
+  showToast('跨仓调拨需求已上报', `物料 ${sku} 的跨仓调遣表单录入成功，已将其自动编入出库队列，待副主仓审核发货。`, 'success');
+}
+
+// ==========================================
+// 极智新版 初始化自运行
+// ==========================================
+initOriginalTableData();
+initMemoHandlers();
+initMetricCardClickListeners();
+resetOptimalFilters();
+setUIMode('optimal'); // 默认进入智能极速交互视图
+
+// 初始化：隐藏 footer 空间
+document.querySelector('main').style.paddingBottom = '48px';
+</script>
+
+</body>
+</html>

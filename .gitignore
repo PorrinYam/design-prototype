@@ -1,0 +1,4 @@
+.qoder/
+.DS_Store
+*.tmp
+temp_script_*.js
